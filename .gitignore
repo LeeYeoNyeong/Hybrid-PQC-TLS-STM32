@@ -1,0 +1,11 @@
+build
+Debug
+Release
+mx.scratch
+!.settings
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.d
