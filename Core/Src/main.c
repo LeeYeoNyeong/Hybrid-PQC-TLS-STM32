@@ -18,12 +18,15 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "string.h"
 #include "cmsis_os.h"
+#include "lwip.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "lwip.h"
+#include "lwip/netif.h"
+extern struct netif gnetif;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,16 +45,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-
-ETH_TxPacketConfig TxConfig;
-ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
-ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
-
 CRYP_HandleTypeDef hcryp;
 __ALIGN_BEGIN static const uint32_t pKeyCRYP[6] __ALIGN_END = {
                             0x00000000,0x00000000,0x00000000,0x00000000,0x00000000,0x00000000};
-
-ETH_HandleTypeDef heth;
 
 HASH_HandleTypeDef hhash;
 
@@ -67,7 +63,7 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for wolfCrypt */
@@ -78,13 +74,28 @@ const osThreadAttr_t wolfCrypt_attributes = {
   .priority = (osPriority_t) osPriorityLow,
 };
 /* USER CODE BEGIN PV */
+/* Retargets the C library printf function to the USART */
+int __io_putchar(int ch)
+{
+    if (ch == '\n') {
+        uint8_t cr = '\r';
+        HAL_UART_Transmit(&huart3, &cr, 1, 0xFFFF);
+    }
+    HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, 0xFFFF);
+    return ch;
+}
 
+int __io_getchar(void)
+{
+    uint8_t ch;
+    HAL_UART_Receive(&huart3, &ch, 1, HAL_MAX_DELAY);
+    return ch;
+}
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ETH_Init(void);
 static void MX_RTC_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
@@ -120,7 +131,9 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stderr, NULL, _IONBF, 0);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -132,7 +145,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ETH_Init();
   MX_RTC_Init();
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
@@ -266,55 +278,6 @@ static void MX_CRYP_Init(void)
   /* USER CODE BEGIN CRYP_Init 2 */
 
   /* USER CODE END CRYP_Init 2 */
-
-}
-
-/**
-  * @brief ETH Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ETH_Init(void)
-{
-
-  /* USER CODE BEGIN ETH_Init 0 */
-
-  /* USER CODE END ETH_Init 0 */
-
-   static uint8_t MACAddr[6];
-
-  /* USER CODE BEGIN ETH_Init 1 */
-
-  /* USER CODE END ETH_Init 1 */
-  heth.Instance = ETH;
-  MACAddr[0] = 0x00;
-  MACAddr[1] = 0x80;
-  MACAddr[2] = 0xE1;
-  MACAddr[3] = 0x00;
-  MACAddr[4] = 0x00;
-  MACAddr[5] = 0x00;
-  heth.Init.MACAddr = &MACAddr[0];
-  heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
-  heth.Init.TxDesc = DMATxDscrTab;
-  heth.Init.RxDesc = DMARxDscrTab;
-  heth.Init.RxBuffLen = 1524;
-
-  /* USER CODE BEGIN MACADDRESS */
-
-  /* USER CODE END MACADDRESS */
-
-  if (HAL_ETH_Init(&heth) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  memset(&TxConfig, 0 , sizeof(ETH_TxPacketConfig));
-  TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
-  TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
-  TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
-  /* USER CODE BEGIN ETH_Init 2 */
-
-  /* USER CODE END ETH_Init 2 */
 
 }
 
@@ -543,7 +506,35 @@ static void MX_GPIO_Init(void)
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
+  /* init code for LWIP */
+  printf("lwIP init starting...\n");
+  MX_LWIP_Init();
+  printf("lwIP init done, waiting for DHCP...\n");
   /* USER CODE BEGIN 5 */
+
+  /* Wait for DHCP IP assignment (max 60s) */
+  uint32_t timeout = 600;
+  uint32_t status_tick = 0;
+  while (gnetif.ip_addr.addr == 0 && timeout-- > 0) {
+    osDelay(100);
+    if (++status_tick % 50 == 0) {  /* every 5 seconds */
+      printf("[MAIN] Waiting DHCP... flags=0x%02X link=%s\n",
+             gnetif.flags,
+             netif_is_link_up(&gnetif) ? "UP" : "DOWN");
+    }
+  }
+  if (gnetif.ip_addr.addr != 0) {
+    printf("IP Address: %lu.%lu.%lu.%lu\n",
+        (gnetif.ip_addr.addr) & 0xFF,
+        (gnetif.ip_addr.addr >> 8) & 0xFF,
+        (gnetif.ip_addr.addr >> 16) & 0xFF,
+        (gnetif.ip_addr.addr >> 24) & 0xFF);
+  } else {
+    printf("DHCP timeout - flags=0x%02X link=%s\n",
+           gnetif.flags,
+           netif_is_link_up(&gnetif) ? "UP" : "DOWN");
+  }
+
   /* Infinite loop */
   for(;;)
   {

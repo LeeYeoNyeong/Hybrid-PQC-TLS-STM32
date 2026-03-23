@@ -27,7 +27,7 @@
 
 /**
     MiddleWare name : wolfSSL.I-CUBE-wolfSSL.5.8.4
-    MiddleWare fileName : ./wolfSSL.I-CUBE-wolfSSL_conf.h
+    MiddleWare fileName : wolfSSL.I-CUBE-wolfSSL_conf.h
     MiddleWare version :
 */
 /*---------- WOLF_CONF_DEBUG -----------*/
@@ -121,7 +121,7 @@
 #define WOLF_CONF_ARMASM      0
 
 /*---------- WOLF_CONF_IO -----------*/
-#define WOLF_CONF_IO      1
+#define WOLF_CONF_IO      2
 
 /*---------- WOLF_CONF_RESUMPTION -----------*/
 #define WOLF_CONF_RESUMPTION      0
@@ -428,7 +428,7 @@
     #endif
     #if WOLF_CONF_MATH == 6 || WOLF_CONF_MATH == 7
         #define WOLFSSL_SP_MATH_ALL /* use sp_int.c multi precision math */
-        //#define WOLFSSL_SP_ARM_THUMB /* enable ARM Thumb ASM speedups */
+        #define WOLFSSL_SP_ARM_THUMB /* enable ARM Thumb ASM speedups */
     #else
         #define WOLFSSL_SP_MATH    /* disable non-standard curves / key sizes */
     #endif
