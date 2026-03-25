@@ -167,6 +167,18 @@ SECTIONS
     _eccmram = .;       /* create a global symbol at ccmram end */
   } >CCMRAM AT> FLASH
 
+  /* Uninitialized CCM RAM – no FLASH copy needed, content undefined at reset.
+   * Used for FreeRTOS heap region 1 (56 KB).  DMA must NOT access this area. */
+  .ccmbss (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sccmbss = .;
+    *(.ccmbss)
+    *(.ccmbss*)
+    . = ALIGN(4);
+    _eccmbss = .;
+  } >CCMRAM
+
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 

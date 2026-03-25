@@ -186,8 +186,9 @@ int main(void)
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
-  /* creation of wolfCrypt */
-  wolfCryptHandle = osThreadNew(wolfCryptDemo, NULL, &wolfCrypt_attributes);
+  /* wolfCryptDemo disabled – its 35 KB stack was consuming heap needed
+   * for Dilithium (~30 KB) verification buffers. */
+  // wolfCryptHandle = osThreadNew(wolfCryptDemo, NULL, &wolfCrypt_attributes);
 
   /* creation of tlsPerf */
   tlsPerfHandle = osThreadNew(tls_perf_task, NULL, &tlsPerf_attributes);

@@ -46,7 +46,7 @@
 #define WOLF_CONF_DTLS      0
 
 /*---------- WOLF_CONF_MATH -----------*/
-#define WOLF_CONF_MATH      7
+#define WOLF_CONF_MATH      4
 
 /*---------- WOLF_CONF_RTOS -----------*/
 #define WOLF_CONF_RTOS      2
@@ -740,6 +740,23 @@
     #undef  WOLFSSL_SHA3
     #define WOLFSSL_SHA3
 #endif /* WOLF_CONF_KYBER */
+
+/* ML-DSA (Dilithium) – verify only, no key-gen or sign */
+#undef  WOLFSSL_EXPERIMENTAL_SETTINGS
+#define WOLFSSL_EXPERIMENTAL_SETTINGS
+#undef  HAVE_DILITHIUM
+#define HAVE_DILITHIUM
+#undef  WOLFSSL_WC_DILITHIUM
+#define WOLFSSL_WC_DILITHIUM
+#define WOLFSSL_DILITHIUM_NO_MAKE_KEY
+#define WOLFSSL_DILITHIUM_NO_SIGN
+/* SHAKE-128 and SHAKE-256 required by Dilithium */
+#undef  WOLFSSL_NO_SHAKE128
+#undef  WOLFSSL_SHAKE128
+#define WOLFSSL_SHAKE128
+#undef  WOLFSSL_NO_SHAKE256
+#undef  WOLFSSL_SHAKE256
+#define WOLFSSL_SHAKE256
 
 /* ------------------------------------------------------------------------- */
 /* Crypto Acceleration */
