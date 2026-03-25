@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include "lwip.h"
 #include "lwip/netif.h"
+#include "tls_client.h"
 extern struct netif gnetif;
 /* USER CODE END Includes */
 
@@ -72,6 +73,13 @@ const osThreadAttr_t wolfCrypt_attributes = {
   .name = "wolfCrypt",
   .stack_size = 8960 * 4,
   .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for tlsPerf */
+osThreadId_t tlsPerfHandle;
+const osThreadAttr_t tlsPerf_attributes = {
+  .name = "tlsPerf",
+  .stack_size = 4096 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* USER CODE BEGIN PV */
 /* Retargets the C library printf function to the USART */
@@ -180,6 +188,9 @@ int main(void)
 
   /* creation of wolfCrypt */
   wolfCryptHandle = osThreadNew(wolfCryptDemo, NULL, &wolfCrypt_attributes);
+
+  /* creation of tlsPerf */
+  tlsPerfHandle = osThreadNew(tls_perf_task, NULL, &tlsPerf_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

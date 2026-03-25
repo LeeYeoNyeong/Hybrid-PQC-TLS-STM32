@@ -43,6 +43,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/Target/ethernetif.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/lwip.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/tls_client.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4xx_hal_msp.c
@@ -321,7 +322,10 @@ set(MX_LINK_DIRS
 set(MX_LINK_LIBS 
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
-    FreeRTOS	LwIP	wolfSSL	
+    FreeRTOS
+    LwIP
+    wolfSSL
+    m
 )
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)

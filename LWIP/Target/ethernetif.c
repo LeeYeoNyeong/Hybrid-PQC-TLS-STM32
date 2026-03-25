@@ -45,7 +45,7 @@
 #define ETHIF_TX_TIMEOUT (2000U)
 /* USER CODE BEGIN OS_THREAD_STACK_SIZE_WITH_RTOS */
 /* Stack size of the interface thread */
-#define INTERFACE_THREAD_STACK_SIZE ( 350 )
+#define INTERFACE_THREAD_STACK_SIZE ( 1024 )
 /* USER CODE END OS_THREAD_STACK_SIZE_WITH_RTOS */
 /* Network interface name */
 #define IFNAME0 's'
@@ -540,21 +540,13 @@ void ethernet_link_thread(void* argument)
 
 /* USER CODE END ETH link init */
 
-  uint32_t dbg_counter = 0;
   for(;;)
   {
 /* USER CODE BEGIN ETH link Thread core code for User BSP */
     HAL_StatusTypeDef phy_status = HAL_ETH_ReadPHYRegister(&heth, _PHY_ADDRESS, PHY_BSR, &phyBSRValue);
     phyLinkStatus = (phyBSRValue & PHY_LINKED_STATUS);
 
-    if (dbg_counter % 20 == 0) {  /* print every 2 seconds */
-      printf("[ETH] PHY read: status=%d BSR=0x%04lX link=%s\n",
-             (int)phy_status, phyBSRValue, phyLinkStatus ? "UP" : "DOWN");
-    }
-    dbg_counter++;
-
     if (phy_status == HAL_OK && phyLinkStatus && !netif_is_link_up(netif)) {
-      printf("[ETH] Link UP detected, calling netif_set_link_up\n");
       netif_set_link_up(netif);
     } else if (!phyLinkStatus && netif_is_link_up(netif)) {
       printf("[ETH] Link DOWN detected\n");

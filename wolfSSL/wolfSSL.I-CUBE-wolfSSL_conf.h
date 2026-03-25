@@ -88,13 +88,13 @@
 #define WOLF_CONF_SHA2_256      1
 
 /*---------- WOLF_CONF_SHA2_384 -----------*/
-#define WOLF_CONF_SHA2_384      0
+#define WOLF_CONF_SHA2_384      1
 
 /*---------- WOLF_CONF_SHA2_512 -----------*/
-#define WOLF_CONF_SHA2_512      0
+#define WOLF_CONF_SHA2_512      1
 
 /*---------- WOLF_CONF_SHA3 -----------*/
-#define WOLF_CONF_SHA3      0
+#define WOLF_CONF_SHA3      1
 
 /*---------- WOLF_CONF_PSK -----------*/
 #define WOLF_CONF_PSK      0
@@ -423,8 +423,8 @@
     #if defined(WOLF_CONF_ECC) && WOLF_CONF_ECC == 1
         #define WOLFSSL_HAVE_SP_ECC
         //#define WOLFSSL_SP_NO_256
-        //#define WOLFSSL_SP_384
-        //#define WOLFSSL_SP_521
+        #define WOLFSSL_SP_384
+        #define WOLFSSL_SP_521
     #endif
     #if WOLF_CONF_MATH == 6 || WOLF_CONF_MATH == 7
         #define WOLFSSL_SP_MATH_ALL /* use sp_int.c multi precision math */
@@ -547,8 +547,8 @@
     //#define HAVE_ECC192
     //#define HAVE_ECC224
     #undef NO_ECC256
-    //#define HAVE_ECC384
-    //#define HAVE_ECC521
+    #define HAVE_ECC384
+    #define HAVE_ECC521
 
     /* Fixed point cache (speeds repeated operations against same private key) */
     #undef  FP_ECC
