@@ -45,6 +45,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/heap_regions.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/tls_client.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/wolfssl_hybrid.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4xx_hal_msp.c
@@ -284,7 +285,7 @@ set(wolfSSL_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/port/atmel/atmel.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/port/st/stm32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/port/st/stsafe.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/IDE/STM32Cube/wolfssl_example.c
+    # wolfssl_example.c excluded: uses wolfSSL_BIO_s_file which requires OPENSSL_EXTRA
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/test/test.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/benchmark/benchmark.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/src/bio.c

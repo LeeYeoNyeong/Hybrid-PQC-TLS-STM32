@@ -11454,6 +11454,15 @@ int MsgCheckEncryption(WOLFSSL* ssl, byte type, byte encrypted)
                     return OUT_OF_ORDER_E;
                 }
                 break;
+#ifdef WOLFSSL_HYBRID_CERT
+            case pq_certificate_verify:
+                if (!encrypted) {
+                    WOLFSSL_MSG("PQCertificateVerify must be encrypted");
+                    WOLFSSL_ERROR_VERBOSE(OUT_OF_ORDER_E);
+                    return OUT_OF_ORDER_E;
+                }
+                break;
+#endif
             case message_hash:
             case no_shake:
             default:
@@ -11560,6 +11569,10 @@ static int MsgCheckBoundary(const WOLFSSL* ssl, byte type,
                 case key_update:
                 case change_cipher_hs:
                     break;
+#ifdef WOLFSSL_HYBRID_CERT
+                case pq_certificate_verify:
+                    break;
+#endif
                 case server_hello_done:
                 case message_hash:
                 case no_shake:
@@ -11688,6 +11701,11 @@ int GetHandshakeHeader(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
 int EarlySanityCheckMsgReceived(WOLFSSL* ssl, byte type, word32 msgSz)
 {
     int ret = 0;
+#ifdef WOLFSSL_HYBRID_CERT
+    /* PQCertificateVerify (type 250) is a custom message: skip early checks */
+    if (type == (byte)pq_certificate_verify)
+        return 0;
+#endif
 #ifndef WOLFSSL_DISABLE_EARLY_SANITY_CHECKS
     /* Version has only been negotiated after we either send or process a
      * ServerHello message */

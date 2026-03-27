@@ -749,7 +749,11 @@
 #undef  WOLFSSL_WC_DILITHIUM
 #define WOLFSSL_WC_DILITHIUM
 #define WOLFSSL_DILITHIUM_NO_MAKE_KEY
-#define WOLFSSL_DILITHIUM_NO_SIGN
+/* Split ML-DSA-87 matrix A (56KB) and verify workspace (24KB) into
+ * two separate heap allocations instead of one 80KB contiguous block.
+ * Without this, verify fails with MEMORY_E on STM32F439 (172KB heap). */
+#define WC_DILITHIUM_CACHE_MATRIX_A
+/* WOLFSSL_DILITHIUM_NO_SIGN removed: DUAL_ALG_CERTS needs ML-DSA verify via ConfirmSignature */
 /* SHAKE-128 and SHAKE-256 required by Dilithium */
 #undef  WOLFSSL_NO_SHAKE128
 #undef  WOLFSSL_SHAKE128
@@ -757,6 +761,11 @@
 #undef  WOLFSSL_NO_SHAKE256
 #undef  WOLFSSL_SHAKE256
 #define WOLFSSL_SHAKE256
+
+/* Catalyst hybrid cert support: parses sapki/altSigAlg/altSigVal extensions */
+#define WOLFSSL_DUAL_ALG_CERTS
+/* Custom 0xFF10 extension + type-250 PQCertificateVerify handler */
+#define WOLFSSL_HYBRID_CERT
 
 /* ------------------------------------------------------------------------- */
 /* Crypto Acceleration */

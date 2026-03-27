@@ -4194,6 +4194,9 @@ struct WOLFSSL_CTX {
     byte *sigSpec;
     word16 sigSpecSz;
 #endif
+#ifdef WOLFSSL_HYBRID_CERT
+    byte hybridCertType;  /* 0=none, 1=chameleon, 2=catalyst; set via wolfSSL_CTX_set_hybrid_cert_type */
+#endif
 #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
     int secLevel; /* The security level of system-wide crypto policy. */
 #endif /* WOLFSSL_SYS_CRYPTO_POLICY */
@@ -5165,6 +5168,9 @@ struct Options {
 #ifdef WOLFSSL_TLS13
     byte            oldMinor;          /* client preferred version < TLS 1.3 */
 #endif
+#ifdef WOLFSSL_HYBRID_CERT
+    byte            hybridCertType;    /* 0=none, 1=chameleon, 2=catalyst */
+#endif
 };
 
 typedef struct Arrays {
@@ -5580,6 +5586,7 @@ typedef struct MsgsReceived {
     word16 got_finished:1;
     word16 got_key_update:1;
     word16 got_change_cipher:1;
+    word16 got_pq_certificate_verify:1;
 } MsgsReceived;
 
 
@@ -6465,6 +6472,9 @@ enum HandShakeType {
     server_hello_done    =  14,
     certificate_verify   =  15,
     client_key_exchange  =  16,
+#ifdef WOLFSSL_HYBRID_CERT
+    pq_certificate_verify = 250,  /* ML-DSA CertificateVerify for Catalyst/Chameleon */
+#endif
     finished             =  20,
     certificate_status   =  22,
     key_update           =  24,

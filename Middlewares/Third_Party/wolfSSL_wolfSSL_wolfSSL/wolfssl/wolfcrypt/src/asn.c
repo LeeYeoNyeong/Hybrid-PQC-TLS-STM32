@@ -18951,8 +18951,12 @@ int ConfirmSignature(SignatureCtx* sigCtx,
                 case ML_DSA_LEVEL3k:
                 case ML_DSA_LEVEL5k:
                 {
-                    ret = wc_dilithium_verify_ctx_msg(sig, sigSz, NULL, 0, buf,
-                        bufSz, &sigCtx->verify, sigCtx->key.dilithium);
+                    /* FIPS 204 ML-DSA.Sign uses external API with ctx=""
+                     * → mu = H(tr || 0x00 || 0x00 || M).
+                     * wc_dilithium_verify_ctx_msg(NULL, 0) matches this. */
+                    ret = wc_dilithium_verify_ctx_msg(sig, sigSz,
+                        NULL, 0, buf, bufSz,
+                        &sigCtx->verify, sigCtx->key.dilithium);
                     break;
                 }
             #endif /* HAVE_DILITHIUM */

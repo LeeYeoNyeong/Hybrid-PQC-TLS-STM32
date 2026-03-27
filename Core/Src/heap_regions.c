@@ -21,8 +21,10 @@
 /* ── Region 0: 56 KB in CCM RAM (uninitialized – heap_5 writes its own headers) ── */
 static uint8_t ccm_heap[56 * 1024] __attribute__((section(".ccmbss")));
 
-/* ── Region 1: 116 KB in main SRAM (BSS – zero-initialised by startup) ── */
-static uint8_t sram_heap[116 * 1024];
+/* ── Region 1: 138 KB in main SRAM (BSS – zero-initialised by startup) ── */
+/* Increased from 116KB: ML-DSA-87 verify needs key->a(56KB) + z(24KB) separately.
+ * RAM=192KB, other BSS~51KB → max heap = 141KB. Using 138KB for 3KB margin. */
+static uint8_t sram_heap[138 * 1024];
 
 /* Regions MUST be listed in ascending start-address order. */
 HeapRegion_t xPqcHeapRegions[] = {

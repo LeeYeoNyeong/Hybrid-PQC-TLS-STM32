@@ -866,7 +866,7 @@ extern const WOLFSSL_ObjectInfo wolfssl_object_info[];
 #endif
 
 #if defined(HAVE_FALCON) || defined(HAVE_DILITHIUM)
-    #define WC_MAX_CERT_VERIFY_SZ 6000            /* For Dilithium */
+    #define WC_MAX_CERT_VERIFY_SZ 8192            /* For Dilithium/ML-DSA; L5 TBS ~7700 bytes */
 #elif defined(WOLFSSL_CERT_EXT)
     #define WC_MAX_CERT_VERIFY_SZ 2048            /* For larger extensions */
 #elif !defined(NO_RSA) && defined(WC_MAX_RSA_BITS)

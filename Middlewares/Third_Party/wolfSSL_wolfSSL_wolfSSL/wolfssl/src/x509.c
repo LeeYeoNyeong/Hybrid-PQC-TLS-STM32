@@ -7991,48 +7991,42 @@ int wolfSSL_i2d_X509(WOLFSSL_X509* x509, unsigned char** out)
  * @return  preTBS der size on success.
  * */
 int wc_GeneratePreTBS(DecodedCert* cert, byte *der, int derSz) {
-    int ret = 0;
-    WOLFSSL_X509 *x = NULL;
-    byte certIsCSR = 0;
+    word32 tbsSz;
+    word32 altSigValOff;
 
     WOLFSSL_ENTER("wc_GeneratePreTBS");
 
     if ((cert == NULL) || (der == NULL) || (derSz <= 0)) {
         return BAD_FUNC_ARG;
     }
-
-#ifdef WOLFSSL_CERT_REQ
-    certIsCSR = cert->isCSR;
-#endif
-
-    x = wolfSSL_X509_new();
-    if (x == NULL) {
-        ret = MEMORY_E;
-    }
-    else {
-        ret = CopyDecodedToX509(x, cert);
+    if ((cert->source == NULL) || (cert->sigIndex <= cert->certBegin)) {
+        return BAD_FUNC_ARG;
     }
 
-    if (ret == 0) {
-        /* Remove the altsigval extension. */
-        XFREE(x->altSigValDer, x->heap, DYNAMIC_TYPE_X509_EXT);
-        x->altSigValDer = NULL;
-        x->altSigValLen = 0;
-        /* Remove sigOID so it won't be encoded. */
-        x->sigOID = 0;
-        /* We now have a PreTBS. Encode it. */
-        ret = wolfssl_x509_make_der(x, certIsCSR, der, &derSz, 0);
-        if (ret == WOLFSSL_SUCCESS) {
-            ret = derSz;
+    tbsSz = cert->sigIndex - cert->certBegin;
+    if ((int)tbsSz > derSz) {
+        return BUFFER_E;
+    }
+
+    /* Copy the original TBSCertificate bytes verbatim — no re-encoding.
+     * This guarantees byte-for-byte identity with what opensslForPQCert
+     * encoded, avoiding any DER round-trip differences. */
+    XMEMCPY(der, cert->source + cert->certBegin, tbsSz);
+
+    /* Zero out the altSigVal raw signature bytes inside the copy.
+     * opensslForPQCert (liboqs) signs TBSCertificate with altSigVal content
+     * replaced by an all-zero BIT STRING of signature size (create_dummy_extension).
+     * altSigValDer points just past the BIT STRING tag+len+unusedBits, so
+     * only the signature payload is zeroed — the BIT STRING header is preserved. */
+    if (cert->altSigValDer != NULL && cert->altSigValLen > 0) {
+        altSigValOff = (word32)(cert->altSigValDer -
+                                (cert->source + cert->certBegin));
+        if (altSigValOff + (word32)cert->altSigValLen <= tbsSz) {
+            XMEMSET(der + altSigValOff, 0, (size_t)cert->altSigValLen);
         }
     }
 
-    if (x != NULL) {
-        wolfSSL_X509_free(x);
-        x = NULL;
-    }
-
-    return ret;
+    return (int)tbsSz;
 }
 #endif /* WOLFSSL_DUAL_ALG_CERTS */
 

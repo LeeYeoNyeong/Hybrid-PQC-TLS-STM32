@@ -9359,7 +9359,6 @@ static int dilithium_verify_mu(dilithium_key* key, const byte* mu,
         /* a */
         allocSz += params->aSz;
 #endif
-
         z = (sword32*)XMALLOC(allocSz, key->heap, DYNAMIC_TYPE_DILITHIUM);
         if (z == NULL) {
             ret = MEMORY_E;
