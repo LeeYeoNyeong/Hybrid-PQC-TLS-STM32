@@ -1786,6 +1786,14 @@ enum Misc {
     DILITHIUM_LEVEL5_SA_MAJOR = 0x09,
     DILITHIUM_LEVEL5_SA_MINOR = 0x06,
 
+    /* OQS composite hybrid sig alg wire codes (OQS-provider convention)
+     * L1: p256_mldsa44=0xFF06, L3: p384_mldsa65=0xFF08, L5: p521_mldsa87=0xFF09 */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    COMPOSITE_L1_SA_MAJOR = 0xFF, COMPOSITE_L1_SA_MINOR = 0x06,
+    COMPOSITE_L3_SA_MAJOR = 0xFF, COMPOSITE_L3_SA_MINOR = 0x08,
+    COMPOSITE_L5_SA_MAJOR = 0xFF, COMPOSITE_L5_SA_MINOR = 0x09,
+#endif
+
     MIN_RSA_SHA512_PSS_BITS = 512 * 2 + 8 * 8, /* Min key size */
     MIN_RSA_SHA384_PSS_BITS = 384 * 2 + 8 * 8, /* Min key size */
 
@@ -4196,6 +4204,12 @@ struct WOLFSSL_CTX {
 #endif
 #ifdef WOLFSSL_HYBRID_CERT
     byte hybridCertType;  /* 0=none, 1=chameleon, 2=catalyst; set via wolfSSL_CTX_set_hybrid_cert_type */
+    /* hybridCertType values — kept in sync with wolfssl_hybrid.h */
+    #ifndef HYBCERT_NONE
+        #define HYBCERT_NONE      0
+        #define HYBCERT_CHAMELEON 1
+        #define HYBCERT_CATALYST  2
+    #endif
 #endif
 #if defined(WOLFSSL_SYS_CRYPTO_POLICY)
     int secLevel; /* The security level of system-wide crypto policy. */
@@ -4310,8 +4324,16 @@ enum SignatureAlgorithm {
     dilithium_level2_sa_algo     = 14,
     dilithium_level3_sa_algo     = 15,
     dilithium_level5_sa_algo     = 16,
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    composite_level1_sa_algo     = 17,
+    composite_level3_sa_algo     = 18,
+    composite_level5_sa_algo     = 19,
+    sm2_sa_algo                  = 20,
+    any_sa_algo                  = 21,
+#else
     sm2_sa_algo                  = 17,
     any_sa_algo                  = 18,
+#endif
     invalid_sa_algo              = 255
 };
 
@@ -5977,6 +5999,21 @@ struct WOLFSSL {
     ecc_key*        peerEccDsaKey;           /* peer's  ECDSA key */
     word16          eccTempKeySz;            /* in octets 20 - 66 */
     byte            peerEccDsaKeyPresent;
+#endif
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* Raw composite public key bytes from the peer's leaf cert.
+     * Format: [4-byte BE EC len][EC pubkey][ML-DSA pubkey]
+     * Used in DoTls13CertificateVerify to verify both components. */
+    byte*           peerCompositePubKey;
+    word32          peerCompositePubKeySz;
+#endif
+#if defined(WOLFSSL_HYBRID_CERT) && defined(HAVE_DILITHIUM)
+    /* SubjectPublicKeyInfo DER of the peer's ML-DSA alt public key.
+     * For Catalyst: copied from dCert->sapkiDer (WOLFSSL_DUAL_ALG_CERTS).
+     * For Chameleon: extracted from the Delta Certificate Descriptor extension.
+     * Used in DoTls13PQCertificateVerify to verify the ML-DSA alt signature. */
+    byte*           peerSapkiDer;
+    int             peerSapkiLen;
 #endif
 #if defined(HAVE_ECC) || defined(HAVE_ED25519) || \
     defined(HAVE_CURVE448) || defined(HAVE_ED448)

@@ -8157,6 +8157,22 @@ static WC_INLINE int DecodeTls13SigAlg(byte* input, byte* hashAlgo,
             }
             break;
 #endif /* HAVE_DILITHIUM */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+        case COMPOSITE_L1_SA_MAJOR:  /* 0xFF — shared major for all composite levels */
+            if (input[1] == COMPOSITE_L1_SA_MINOR) {       /* 0x06: p256_mldsa44 */
+                *hsType   = composite_level1_sa_algo;
+                *hashAlgo = sha256_mac;
+            } else if (input[1] == COMPOSITE_L3_SA_MINOR) { /* 0x08: p384_mldsa65 */
+                *hsType   = composite_level3_sa_algo;
+                *hashAlgo = sha384_mac;
+            } else if (input[1] == COMPOSITE_L5_SA_MINOR) { /* 0x09: p521_mldsa87 */
+                *hsType   = composite_level5_sa_algo;
+                *hashAlgo = sha512_mac;
+            } else {
+                ret = INVALID_PARAMETER;
+            }
+            break;
+#endif /* WOLFSSL_COMPOSITE_CERTS */
         default:
             *hashAlgo = input[0];
             *hsType   = input[1];
@@ -10239,6 +10255,10 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
                 ERROR_OUT(BUFFER_ERROR, exit_dcv);
             }
 
+            /* [COMPOSITE-DBG] Print received CertificateVerify sigalg bytes */
+            printf("[DBG] CertVerify sigalg: 0x%02X 0x%02X\r\n",
+                   input[args->idx + 0], input[args->idx + 1]);
+
             validSigAlgo = 0;
             for (i = 0; i < suites->hashSigAlgoSz; i += 2) {
                  if ((suites->hashSigAlgo[i + 0] == input[args->idx + 0]) &&
@@ -10248,6 +10268,8 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
                  }
             }
             if (!validSigAlgo) {
+                printf("[DBG] CertVerify INVALID sigalg 0x%02X%02X (not in suites)\r\n",
+                       input[args->idx + 0], input[args->idx + 1]);
                 ERROR_OUT(INVALID_PARAMETER, exit_dcv);
             }
 
@@ -10445,6 +10467,17 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
                 WOLFSSL_MSG("Peer sent Dilithium Level 5 sig");
                 validSigAlgo = (ssl->peerDilithiumKey != NULL) &&
                                ssl->peerDilithiumKeyPresent;
+            }
+        #endif
+        #ifdef WOLFSSL_COMPOSITE_CERTS
+            if (ssl->options.peerSigAlgo == composite_level1_sa_algo ||
+                ssl->options.peerSigAlgo == composite_level3_sa_algo ||
+                ssl->options.peerSigAlgo == composite_level5_sa_algo) {
+                WOLFSSL_MSG("Peer sent Composite (ECDSA+MLDSA) sig");
+                /* Composite key is embedded in the peer ECC DSA key slot;
+                 * the raw composite public key was loaded during cert parse. */
+                validSigAlgo = (ssl->peerEccDsaKey != NULL) &&
+                               ssl->peerEccDsaKeyPresent;
             }
         #endif
         #ifndef NO_RSA
@@ -10753,6 +10786,112 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
                 }
             }
         #endif /* HAVE_DILITHIUM */
+        #if defined(WOLFSSL_COMPOSITE_CERTS) && defined(HAVE_ECC) && \
+            defined(HAVE_DILITHIUM) && !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
+            if ((ssl->options.peerSigAlgo == composite_level1_sa_algo ||
+                 ssl->options.peerSigAlgo == composite_level3_sa_algo ||
+                 ssl->options.peerSigAlgo == composite_level5_sa_algo) &&
+                ssl->peerEccDsaKeyPresent &&
+                ssl->peerCompositePubKey != NULL) {
+
+                const byte *cpk = ssl->peerCompositePubKey;
+                word32 cpkSz    = ssl->peerCompositePubKeySz;
+                const byte *csig = sig;
+                word32 csigSz   = args->sigSz;
+
+                int ecVerify = 0, mlVerify = 0;
+
+                WOLFSSL_MSG("Doing Composite (ECDSA+MLDSA) peer cert verify");
+
+                if (cpkSz < 4 || csigSz < 4) {
+                    ERROR_OUT(BUFFER_ERROR, exit_dcv);
+                }
+
+                /* Parse composite public key: [4-byte BE EC len][EC pub][ML-DSA pub] */
+                word32 ecPubLen = ((word32)cpk[0] << 24) | ((word32)cpk[1] << 16) |
+                                  ((word32)cpk[2] << 8) | cpk[3];
+                if (4 + ecPubLen > cpkSz) { ERROR_OUT(BUFFER_ERROR, exit_dcv); }
+                const byte *ecPub = cpk + 4;
+                const byte *mlPub = cpk + 4 + ecPubLen;
+                word32 mlPubLen   = cpkSz - 4 - ecPubLen;
+
+                /* Parse composite signature: [4-byte BE ECDSA len][ECDSA sig][ML-DSA sig] */
+                word32 ecSigLen = ((word32)csig[0] << 24) | ((word32)csig[1] << 16) |
+                                  ((word32)csig[2] << 8) | csig[3];
+                if (4 + ecSigLen > csigSz) { ERROR_OUT(BUFFER_ERROR, exit_dcv); }
+                const byte *ecSig = csig + 4;
+                const byte *mlSig = csig + 4 + ecSigLen;
+                word32 mlSigLen   = csigSz - 4 - ecSigLen;
+
+                /* 1) Verify ECDSA component over SHA hash of sigData
+                 * ecPub is a raw uncompressed EC point (04||x||y). */
+                {
+                    ecc_key tmpEcc;
+                    /* L1 (ML-DSA-44, claimed_nist_level=2) and L3 both use SHA384;
+                     * only L5 uses SHA512. */
+                    enum wc_HashType ht =
+                        (ssl->options.peerSigAlgo == composite_level5_sa_algo) ?
+                            WC_HASH_TYPE_SHA512 :
+                            WC_HASH_TYPE_SHA384;
+                    int hSz = wc_HashGetDigestSize(ht);
+                    byte hBuf[WC_MAX_DIGEST_SIZE];
+
+                    ret = wc_ecc_init_ex(&tmpEcc, ssl->heap, ssl->devId);
+                    if (ret == 0) {
+                        ret = wc_ecc_import_x963(ecPub, ecPubLen, &tmpEcc);
+                        if (ret == 0) {
+                            ret = wc_Hash(ht, args->sigData, args->sigDataSz,
+                                          hBuf, (word32)hSz);
+                            if (ret == 0) {
+                                ret = wc_ecc_verify_hash(ecSig, ecSigLen,
+                                                         hBuf, (word32)hSz,
+                                                         &ecVerify, &tmpEcc);
+                            }
+                        }
+                        wc_ecc_free(&tmpEcc);
+                    }
+                    if (ret != 0) { goto exit_dcv; }
+                }
+
+                /* 2) Verify ML-DSA component over full sigData (hash-in-sign)
+                 * mlPub is raw ML-DSA public key bytes. */
+                {
+                    dilithium_key tmpMl;
+                    int mlLevel =
+                        (ssl->options.peerSigAlgo == composite_level5_sa_algo) ?
+                            WC_ML_DSA_87 :
+                        (ssl->options.peerSigAlgo == composite_level3_sa_algo) ?
+                            WC_ML_DSA_65 : WC_ML_DSA_44;
+
+                    ret = wc_dilithium_init_ex(&tmpMl, ssl->heap, ssl->devId);
+                    if (ret == 0) {
+                        ret = wc_dilithium_set_level(&tmpMl, mlLevel);
+                        if (ret == 0) {
+                            ret = wc_dilithium_import_public(mlPub, mlPubLen,
+                                                             &tmpMl);
+                            if (ret == 0) {
+                                ret = wc_dilithium_verify_ctx_msg(
+                                        mlSig, mlSigLen, NULL, 0,
+                                        args->sigData, args->sigDataSz,
+                                        &mlVerify, &tmpMl);
+                            }
+                        }
+                        wc_dilithium_free(&tmpMl);
+                    }
+                    if (ret != 0) { goto exit_dcv; }
+                }
+
+                if (ecVerify == 1 && mlVerify == 1) {
+                    ssl->options.peerAuthGood = 1;
+                    FreeKey(ssl, DYNAMIC_TYPE_ECC, (void**)&ssl->peerEccDsaKey);
+                    ssl->peerEccDsaKeyPresent = 0;
+                }
+                else {
+                    WOLFSSL_MSG("Composite CertificateVerify: component failed");
+                    ret = SIG_VERIFY_E;
+                }
+            }
+        #endif /* WOLFSSL_COMPOSITE_CERTS */
 
             /* Check for error */
             if (ret != 0) {
@@ -10991,34 +11130,118 @@ exit_dcv:
 #endif /* !NO_CERTS */
 
 #ifdef WOLFSSL_HYBRID_CERT
-/* Handle PQ CertificateVerify (type 250) — ML-DSA alt signature over transcript.
- * Currently a stub: parses and skips the message so the handshake can complete.
- * TODO: verify ML-DSA signature when jelliyjane-patched server is used.
- */
+/* Label used by server for PQCertificateVerify data-to-sign.
+ * Must match SendTls13PQCertificateVerify on the server side. */
+#define PQ_CERT_VFY_LABEL_SZ 35
+static const byte serverPQCertVfyLabel[PQ_CERT_VFY_LABEL_SZ] =
+    "TLS 1.3, server PQCertificateVerify";
+
+/* Build the data-to-be-signed for PQCertificateVerify.
+ * Structure: 64×0x20 || label || 0x00 || transcript_hash */
+static int CreatePQSigData(WOLFSSL* ssl, byte* sigData, word16* sigDataSz)
+{
+    word16 idx;
+    int    ret;
+    XMEMSET(sigData, SIGNING_DATA_PREFIX_BYTE, SIGNING_DATA_PREFIX_SZ);
+    idx = SIGNING_DATA_PREFIX_SZ;
+    XMEMCPY(&sigData[idx], serverPQCertVfyLabel, PQ_CERT_VFY_LABEL_SZ);
+    idx += PQ_CERT_VFY_LABEL_SZ;
+    ret = GetMsgHash(ssl, &sigData[idx]);
+    if (ret < 0) return ret;
+    *sigDataSz = (word16)(idx + ret);
+    return 0;
+}
+
+/* Handle PQ CertificateVerify (type 250):
+ * [sigAlgo(2)][sigLen(2)][ML-DSA signature(n)]
+ * Verifies ML-DSA signature over transcript using the peer's SAPKI
+ * (populated from Catalyst cert's SAPKI extension or Chameleon DCD). */
 static int DoTls13PQCertificateVerify(WOLFSSL* ssl, byte* input,
                                       word32* inOutIdx, word32 size)
 {
-    word32 idx = *inOutIdx;
-    word16 sigAlgo, sigSz;
-    (void)ssl;
+    int    ret = 0;
+    word16 ato16_tmp;
+    word32 sigLen;
+    byte  *sig;
+    byte  *sigData = NULL;
+    word16 sigDataSz = 0;
+#ifdef HAVE_DILITHIUM
+    dilithium_key *pqKey = NULL;
+#endif
 
-    if (size < 4)
+    if (size < HASH_SIG_SIZE + VERIFY_HEADER)
         return BUFFER_ERROR;
-    ato16(input + idx, &sigAlgo); idx += 2;
-    ato16(input + idx, &sigSz);   idx += 2;
-    printf("[TLS] PQCertificateVerify: sigAlgo=%u sigSz=%u\r\n",
-           (unsigned)sigAlgo, (unsigned)sigSz);
-    if ((word32)(4 + sigSz) > size)
+
+    /* Skip sigAlgo (2 bytes) */
+    *inOutIdx += HASH_SIG_SIZE;
+
+    /* Signature length */
+    ato16(input + *inOutIdx, &ato16_tmp);
+    sigLen = ato16_tmp;
+    *inOutIdx += VERIFY_HEADER;
+
+    if (size < (word32)(HASH_SIG_SIZE + VERIFY_HEADER + sigLen))
         return BUFFER_ERROR;
-    /* Skip signature bytes — full ML-DSA verify deferred on constrained target */
-    idx += sigSz;
-    *inOutIdx = idx;
-    /* Encryption is always on: consume padSz to force input exhaustion,
-     * matching the behaviour of DoTls13CertificateVerify (line ~10936). */
-    *inOutIdx += ssl->keys.padSz;
-    ssl->msgsReceived.got_pq_certificate_verify = 1;
-    WOLFSSL_MSG("PQ CertificateVerify (type 250) accepted (stub)");
-    return 0;
+    sig = input + *inOutIdx;
+    *inOutIdx += sigLen;
+
+    printf("[TLS] PQCertificateVerify: sigLen=%u\r\n", (unsigned)sigLen);
+
+#if defined(HAVE_DILITHIUM)
+    if (ssl->peerSapkiDer == NULL || ssl->peerSapkiLen <= 0) {
+        /* No ML-DSA pubkey available — accept without verification */
+        printf("[TLS] PQCertificateVerify: no peer SAPKI, skipping ML-DSA verify\r\n");
+        goto accept;
+    }
+
+    /* Build the data-to-sign */
+    sigData = (byte*)XMALLOC(SIGNING_DATA_PREFIX_SZ + PQ_CERT_VFY_LABEL_SZ +
+                              WC_MAX_DIGEST_SIZE, ssl->heap, DYNAMIC_TYPE_SIGNATURE);
+    if (sigData == NULL) { ret = MEMORY_E; goto done; }
+    ret = CreatePQSigData(ssl, sigData, &sigDataSz);
+    if (ret != 0) goto done;
+
+    /* Import ML-DSA public key from SAPKI DER */
+    ret = AllocKey(ssl, DYNAMIC_TYPE_DILITHIUM, (void**)&pqKey);
+    if (ret != 0) goto done;
+    {
+        word32 kidx = 0;
+        ret = wc_Dilithium_PublicKeyDecode(ssl->peerSapkiDer, &kidx,
+                                           pqKey, (word32)ssl->peerSapkiLen);
+        if (ret != 0) { goto done; }
+    }
+
+    /* Verify ML-DSA signature */
+    {
+        int res = 0;
+        ret = wc_dilithium_verify_ctx_msg(sig, sigLen, NULL, 0,
+                                          sigData, sigDataSz, &res, pqKey);
+        if (ret == 0 && res != 1) ret = SIG_VERIFY_E;
+    }
+
+    if (ret == 0)
+        printf("[TLS] PQCertificateVerify: ML-DSA verification OK\r\n");
+    else
+        printf("[TLS] PQCertificateVerify: ML-DSA verification FAILED err=%d\r\n", ret);
+    goto done;
+
+accept:
+#else
+    (void)sig; (void)sigLen;
+#endif /* HAVE_DILITHIUM */
+    ret = 0;
+
+done:
+#if defined(HAVE_DILITHIUM)
+    if (pqKey != NULL) FreeKey(ssl, DYNAMIC_TYPE_DILITHIUM, (void**)&pqKey);
+    if (sigData != NULL) XFREE(sigData, ssl->heap, DYNAMIC_TYPE_SIGNATURE);
+#endif
+    if (ret == 0) {
+        ssl->msgsReceived.got_pq_certificate_verify = 1;
+        /* Encryption is always on: consume padding bytes */
+        *inOutIdx += ssl->keys.padSz;
+    }
+    return ret;
 }
 #endif /* WOLFSSL_HYBRID_CERT */
 

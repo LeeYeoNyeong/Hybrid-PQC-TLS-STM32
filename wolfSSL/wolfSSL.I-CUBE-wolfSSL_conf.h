@@ -766,6 +766,8 @@
 #define WOLFSSL_DUAL_ALG_CERTS
 /* Custom 0xFF10 extension + type-250 PQCertificateVerify handler */
 #define WOLFSSL_HYBRID_CERT
+/* OQS composite hybrid certs (p256_mldsa44 / p384_mldsa65 / p521_mldsa87) */
+#define WOLFSSL_COMPOSITE_CERTS
 
 /* ------------------------------------------------------------------------- */
 /* Crypto Acceleration */

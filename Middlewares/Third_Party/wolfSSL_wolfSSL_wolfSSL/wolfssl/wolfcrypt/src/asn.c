@@ -4383,6 +4383,14 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte sigMlDsa_Level5Oid[] =
         {96, 134, 72, 1, 101, 3, 4, 3, 19};
 #endif /* HAVE_DILITHIUM */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* Composite sig p256_mldsa44: 1.3.9999.7.5 */
+    static const byte sigComposite_L1_Oid[] = {43, 206, 15, 7, 5};
+    /* Composite sig p384_mldsa65: 1.3.9999.7.7 */
+    static const byte sigComposite_L3_Oid[] = {43, 206, 15, 7, 7};
+    /* Composite sig p521_mldsa87: 1.3.9999.7.8 */
+    static const byte sigComposite_L5_Oid[] = {43, 206, 15, 7, 8};
+#endif /* WOLFSSL_COMPOSITE_CERTS */
 #ifdef HAVE_SPHINCS
     /* Sphincs Fast Level 1: 1 3 9999 6 7 4 */
     static const byte sigSphincsFast_Level1Oid[] =
@@ -4471,6 +4479,14 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte keyMlDsa_Level5Oid[] =
         {96, 134, 72, 1, 101, 3, 4, 3, 19};
 #endif /* HAVE_DILITHIUM */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* Composite p256_mldsa44: 1.3.9999.7.5 */
+    static const byte keyComposite_L1_Oid[] = {43, 206, 15, 7, 5};
+    /* Composite p384_mldsa65: 1.3.9999.7.7 */
+    static const byte keyComposite_L3_Oid[] = {43, 206, 15, 7, 7};
+    /* Composite p521_mldsa87: 1.3.9999.7.8 */
+    static const byte keyComposite_L5_Oid[] = {43, 206, 15, 7, 8};
+#endif /* WOLFSSL_COMPOSITE_CERTS */
 #ifdef HAVE_SPHINCS
     /* Sphincs Fast Level 1: 1 3 9999 6 7 4 */
     static const byte keySphincsFast_Level1Oid[] =
@@ -5326,6 +5342,20 @@ const byte* OidFromId(word32 id, word32 type, word32* oidSz)
                     *oidSz = sizeof(sigMlDsa_Level5Oid);
                     break;
             #endif /* HAVE_DILITHIUM */
+            #ifdef WOLFSSL_COMPOSITE_CERTS
+                case CTC_COMPOSITE_L1:
+                    oid = sigComposite_L1_Oid;
+                    *oidSz = sizeof(sigComposite_L1_Oid);
+                    break;
+                case CTC_COMPOSITE_L3:
+                    oid = sigComposite_L3_Oid;
+                    *oidSz = sizeof(sigComposite_L3_Oid);
+                    break;
+                case CTC_COMPOSITE_L5:
+                    oid = sigComposite_L5_Oid;
+                    *oidSz = sizeof(sigComposite_L5_Oid);
+                    break;
+            #endif /* WOLFSSL_COMPOSITE_CERTS */
                 #ifdef HAVE_SPHINCS
                 case CTC_SPHINCS_FAST_LEVEL1:
                     oid = sigSphincsFast_Level1Oid;
@@ -5451,6 +5481,20 @@ const byte* OidFromId(word32 id, word32 type, word32* oidSz)
                     *oidSz = sizeof(keyMlDsa_Level5Oid);
                     break;
             #endif /* HAVE_DILITHIUM */
+            #ifdef WOLFSSL_COMPOSITE_CERTS
+                case COMPOSITE_L1k:
+                    oid = keyComposite_L1_Oid;
+                    *oidSz = sizeof(keyComposite_L1_Oid);
+                    break;
+                case COMPOSITE_L3k:
+                    oid = keyComposite_L3_Oid;
+                    *oidSz = sizeof(keyComposite_L3_Oid);
+                    break;
+                case COMPOSITE_L5k:
+                    oid = keyComposite_L5_Oid;
+                    *oidSz = sizeof(keyComposite_L5_Oid);
+                    break;
+            #endif /* WOLFSSL_COMPOSITE_CERTS */
                 #ifdef HAVE_SPHINCS
                 case SPHINCS_FAST_LEVEL1k:
                     oid = keySphincsFast_Level1Oid;
@@ -14086,6 +14130,16 @@ static int GetCertKey(DecodedCert* cert, const byte* source, word32* inOutIdx,
             ret = StoreKey(cert, source, &srcIdx, maxIdx);
             break;
     #endif /* HAVE_DILITHIUM */
+    #ifdef WOLFSSL_COMPOSITE_CERTS
+        case COMPOSITE_L1k:
+        case COMPOSITE_L3k:
+        case COMPOSITE_L5k:
+            /* Store raw composite public key bits (no inner structure parsed).
+             * Format: [4-byte BE EC-pubkey-len][EC pubkey][ML-DSA pubkey] */
+            cert->pkCurveOID = cert->keyOID;
+            ret = StoreKey(cert, source, &srcIdx, maxIdx);
+            break;
+    #endif /* WOLFSSL_COMPOSITE_CERTS */
     #ifdef HAVE_SPHINCS
         case SPHINCS_FAST_LEVEL1k:
             cert->pkCurveOID = SPHINCS_FAST_LEVEL1k;
@@ -17505,6 +17559,11 @@ static WC_INLINE int IsSigAlgoECC(word32 algoOID)
               || (algoOID == SPHINCS_SMALL_LEVEL3k)
               || (algoOID == SPHINCS_SMALL_LEVEL5k)
         #endif
+        #ifdef WOLFSSL_COMPOSITE_CERTS
+              || (algoOID == COMPOSITE_L1k)
+              || (algoOID == COMPOSITE_L3k)
+              || (algoOID == COMPOSITE_L5k)
+        #endif
     );
 }
 
@@ -18075,6 +18134,13 @@ static int HashForSignature(const byte* buf, word32 bufSz, word32 sigOID,
         case CTC_ML_DSA_LEVEL3:
         case CTC_ML_DSA_LEVEL5:
             /* Hashes done in signing operation. */
+            break;
+    #endif
+    #ifdef WOLFSSL_COMPOSITE_CERTS
+        case CTC_COMPOSITE_L1:
+        case CTC_COMPOSITE_L3:
+        case CTC_COMPOSITE_L5:
+            /* Hash computed inline in ConfirmSignature SIG_STATE_KEY. */
             break;
     #endif
     #ifdef HAVE_SPHINCS
@@ -18770,6 +18836,128 @@ int ConfirmSignature(SignatureCtx* sigCtx,
                     break;
                 }
             #endif /* HAVE_SPHINCS */
+        #if defined(WOLFSSL_COMPOSITE_CERTS) && defined(HAVE_ECC) && \
+            defined(HAVE_DILITHIUM) && !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
+            case COMPOSITE_L1k:
+            case COMPOSITE_L3k:
+            case COMPOSITE_L5k:
+            {
+                /* Composite pubkey format: [4-byte BE EC len][EC pubkey][ML-DSA pubkey]
+                 * Composite sig format:    [4-byte BE ECDSA len][ECDSA sig][ML-DSA sig]
+                 * Both components are verified inline here; SIG_STATE_DO is a no-op. */
+                const byte *cpk = key;
+                const byte *csig = sig;
+                int ecVerify = 0, mlVerify = 0;
+
+                if (keySz < 4 || sigSz < 4) { ret = ASN_PARSE_E; goto exit_cs; }
+
+                WOLFSSL_MSG_EX("Composite DBG: keySz=%u sigSz=%u bufSz=%u", keySz, sigSz, bufSz);
+                WOLFSSL_MSG_EX("Composite DBG: key[0..3]=%02x %02x %02x %02x",
+                               cpk[0], cpk[1], cpk[2], cpk[3]);
+                WOLFSSL_MSG_EX("Composite DBG: sig[0..3]=%02x %02x %02x %02x",
+                               csig[0], csig[1], csig[2], csig[3]);
+
+                /* Parse composite pubkey */
+                word32 ecPubLen = ((word32)cpk[0] << 24) | ((word32)cpk[1] << 16) |
+                                  ((word32)cpk[2] << 8) | cpk[3];
+                if (4 + ecPubLen > keySz) { ret = ASN_PARSE_E; goto exit_cs; }
+                const byte *ecPub = cpk + 4;
+                const byte *mlPub = cpk + 4 + ecPubLen;
+                word32 mlPubLen  = keySz - 4 - ecPubLen;
+
+                /* Parse composite sig */
+                word32 ecSigLen = ((word32)csig[0] << 24) | ((word32)csig[1] << 16) |
+                                  ((word32)csig[2] << 8) | csig[3];
+                if (4 + ecSigLen > sigSz) { ret = ASN_PARSE_E; goto exit_cs; }
+                const byte *ecSig = csig + 4;
+                const byte *mlSig = csig + 4 + ecSigLen;
+                word32 mlSigLen  = sigSz - 4 - ecSigLen;
+
+                /* Determine hash algorithm for ECDSA component.
+                 * OQS provider selects hash based on claimed_nist_level:
+                 *   ML-DSA-44 (L1) has claimed_nist_level=2 → SHA384
+                 *   ML-DSA-65 (L3) has claimed_nist_level=3 → SHA384
+                 *   ML-DSA-87 (L5) has claimed_nist_level=5 → SHA512
+                 * So L1 and L3 both use SHA384, L5 uses SHA512. */
+                enum wc_HashType hashType =
+                    (keyOID == COMPOSITE_L5k) ? WC_HASH_TYPE_SHA512 :
+                                                WC_HASH_TYPE_SHA384;
+                int hashSz = wc_HashGetDigestSize(hashType);
+                if (hashSz <= 0) { ret = ASN_PARSE_E; goto exit_cs; }
+
+                byte hashBuf[WC_MAX_DIGEST_SIZE];
+                ret = wc_Hash(hashType, buf, bufSz, hashBuf, (word32)hashSz);
+                if (ret != 0) {
+                    WOLFSSL_MSG("Composite: hash for ECDSA failed");
+                    goto exit_cs;
+                }
+
+                /* Verify ECDSA component
+                 * ecPub is a raw uncompressed EC point (04 || x || y), not DER.
+                 * Use wc_ecc_import_x963 to import raw bytes. */
+                {
+                    ecc_key tmpEcc;
+                    int ecInitRet, ecImportRet, ecVerifyRet;
+                    ecInitRet = wc_ecc_init_ex(&tmpEcc, sigCtx->heap, sigCtx->devId);
+                    WOLFSSL_MSG_EX("Composite DBG: ecPubLen=%u ecSigLen=%u hashSz=%d bufSz=%u",
+                                   ecPubLen, ecSigLen, hashSz, bufSz);
+                    if (ecInitRet == 0) {
+                        ecImportRet = wc_ecc_import_x963(ecPub, ecPubLen, &tmpEcc);
+                        WOLFSSL_MSG_EX("Composite DBG: wc_ecc_import_x963 ret=%d", ecImportRet);
+                        if (ecImportRet == 0) {
+                            ecVerifyRet = wc_ecc_verify_hash(ecSig, ecSigLen, hashBuf,
+                                                     (word32)hashSz, &ecVerify, &tmpEcc);
+                            WOLFSSL_MSG_EX("Composite DBG: wc_ecc_verify_hash ret=%d ecVerify=%d",
+                                           ecVerifyRet, ecVerify);
+                            ret = ecVerifyRet;
+                        }
+                        else { WOLFSSL_MSG("Composite: EC pubkey import failed"); ret = ecImportRet; }
+                        wc_ecc_free(&tmpEcc);
+                    }
+                    else { ret = ecInitRet; }
+                    if (ret != 0) goto exit_cs;
+                }
+
+                /* Verify ML-DSA component
+                 * mlPub is raw ML-DSA public key bytes, not DER.
+                 * Use wc_dilithium_import_public to import raw bytes. */
+                {
+                    dilithium_key tmpMl;
+                    int mlLevel = (keyOID == COMPOSITE_L5k) ? WC_ML_DSA_87 :
+                                  (keyOID == COMPOSITE_L3k) ? WC_ML_DSA_65 :
+                                                              WC_ML_DSA_44;
+                    int mlInitRet, mlImportRet, mlVerifyRet;
+                    WOLFSSL_MSG_EX("Composite DBG: mlPubLen=%u mlSigLen=%u mlLevel=%d",
+                                   mlPubLen, mlSigLen, mlLevel);
+                    mlInitRet = wc_dilithium_init_ex(&tmpMl, sigCtx->heap, sigCtx->devId);
+                    if (mlInitRet == 0) {
+                        mlImportRet = wc_dilithium_set_level(&tmpMl, mlLevel);
+                        if (mlImportRet == 0)
+                            mlImportRet = wc_dilithium_import_public(mlPub, mlPubLen, &tmpMl);
+                        WOLFSSL_MSG_EX("Composite DBG: ml set_level+import_public ret=%d", mlImportRet);
+                        if (mlImportRet == 0) {
+                            mlVerifyRet = wc_dilithium_verify_ctx_msg(mlSig, mlSigLen,
+                                                              NULL, 0,
+                                                              buf, bufSz,
+                                                              &mlVerify, &tmpMl);
+                            WOLFSSL_MSG_EX("Composite DBG: wc_dilithium_verify_ctx_msg ret=%d mlVerify=%d",
+                                           mlVerifyRet, mlVerify);
+                            ret = mlVerifyRet;
+                        }
+                        else { WOLFSSL_MSG("Composite: ML-DSA pubkey import failed"); ret = mlImportRet; }
+                        wc_dilithium_free(&tmpMl);
+                    }
+                    else { ret = mlInitRet; }
+                    if (ret != 0) goto exit_cs;
+                }
+
+                WOLFSSL_MSG_EX("Composite DBG: ecVerify=%d mlVerify=%d", ecVerify, mlVerify);
+                sigCtx->verify = (ecVerify == 1 && mlVerify == 1) ? 1 : 0;
+                /* Keep a dummy ECC key in sigCtx so SIG_STATE_DO doesn't crash */
+                sigCtx->key.ecc = NULL;
+                break;
+            }
+        #endif /* WOLFSSL_COMPOSITE_CERTS */
                 default:
                     WOLFSSL_MSG("Verify Key type unknown");
                     ret = ASN_UNKNOWN_OID_E;
@@ -18974,6 +19162,14 @@ int ConfirmSignature(SignatureCtx* sigCtx,
                     break;
                 }
             #endif /* HAVE_SPHINCS */
+            #ifdef WOLFSSL_COMPOSITE_CERTS
+                case COMPOSITE_L1k:
+                case COMPOSITE_L3k:
+                case COMPOSITE_L5k:
+                    /* Both components were already verified in SIG_STATE_KEY;
+                     * sigCtx->verify is already set.  Nothing to do here. */
+                    break;
+            #endif /* WOLFSSL_COMPOSITE_CERTS */
                 default:
                     break;
             }  /* switch (keyOID) */
@@ -19238,6 +19434,22 @@ int ConfirmSignature(SignatureCtx* sigCtx,
                     break;
                 }
             #endif /* HAVE_SPHINCS */
+            #ifdef WOLFSSL_COMPOSITE_CERTS
+                case COMPOSITE_L1k:
+                case COMPOSITE_L3k:
+                case COMPOSITE_L5k:
+                {
+                    if (sigCtx->verify == 1) {
+                        ret = 0;
+                    }
+                    else {
+                        WOLFSSL_MSG("Composite (ECDSA+MLDSA) Verify didn't match");
+                        ret = ASN_SIG_CONFIRM_E;
+                        WOLFSSL_ERROR_VERBOSE(ret);
+                    }
+                    break;
+                }
+            #endif /* WOLFSSL_COMPOSITE_CERTS */
                 default:
                     break;
             }  /* switch (keyOID) */

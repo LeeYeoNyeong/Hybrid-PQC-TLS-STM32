@@ -3296,6 +3296,23 @@ static WC_INLINE void AddSuiteHashSigAlgo(byte* hashSigAlgo, byte macAlgo,
         }
         else
     #endif /* HAVE_DILITHIUM */
+    #ifdef WOLFSSL_COMPOSITE_CERTS
+        if (sigAlgo == composite_level1_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                COMPOSITE_L1_SA_MAJOR, COMPOSITE_L1_SA_MINOR);
+        }
+        else
+        if (sigAlgo == composite_level3_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                COMPOSITE_L3_SA_MAJOR, COMPOSITE_L3_SA_MINOR);
+        }
+        else
+        if (sigAlgo == composite_level5_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                COMPOSITE_L5_SA_MAJOR, COMPOSITE_L5_SA_MINOR);
+        }
+        else
+    #endif /* WOLFSSL_COMPOSITE_CERTS */
 #ifdef WC_RSA_PSS
         if (sigAlgo == rsa_pss_sa_algo) {
             /* RSA PSS is sig then mac */
@@ -3374,6 +3391,16 @@ void InitSuitesHashSigAlgo(byte* hashSigAlgo, int haveSig, int tls1_2,
             keySz, &idx);
     }
 #endif /* HAVE_DILITHIUM */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    if (haveSig & SIG_DILITHIUM) {
+        AddSuiteHashSigAlgo(hashSigAlgo, no_mac, composite_level1_sa_algo,
+            keySz, &idx);
+        AddSuiteHashSigAlgo(hashSigAlgo, no_mac, composite_level3_sa_algo,
+            keySz, &idx);
+        AddSuiteHashSigAlgo(hashSigAlgo, no_mac, composite_level5_sa_algo,
+            keySz, &idx);
+    }
+#endif /* WOLFSSL_COMPOSITE_CERTS */
     if (haveSig & SIG_RSA) {
     #ifdef WC_RSA_PSS
         if (tls1_2) {
@@ -8630,6 +8657,20 @@ void wolfSSL_ResourceFree(WOLFSSL* ssl)
     ssl->peerEccKeyPresent = 0;
     FreeKey(ssl, DYNAMIC_TYPE_ECC, (void**)&ssl->peerEccDsaKey);
     ssl->peerEccDsaKeyPresent = 0;
+#if defined(WOLFSSL_COMPOSITE_CERTS)
+    if (ssl->peerCompositePubKey != NULL) {
+        XFREE(ssl->peerCompositePubKey, ssl->heap, DYNAMIC_TYPE_PUBLIC_KEY);
+        ssl->peerCompositePubKey = NULL;
+        ssl->peerCompositePubKeySz = 0;
+    }
+#endif
+#if defined(WOLFSSL_HYBRID_CERT) && defined(HAVE_DILITHIUM)
+    if (ssl->peerSapkiDer != NULL) {
+        XFREE(ssl->peerSapkiDer, ssl->heap, DYNAMIC_TYPE_PUBLIC_KEY);
+        ssl->peerSapkiDer = NULL;
+        ssl->peerSapkiLen = 0;
+    }
+#endif
 #endif
 #if defined(HAVE_ECC) || defined(HAVE_CURVE25519) ||defined(HAVE_CURVE448)
     {
@@ -15298,6 +15339,245 @@ static int AdjustCMForParams(WOLFSSL* ssl)
 }
 #endif
 
+#if defined(WOLFSSL_HYBRID_CERT) && defined(HAVE_DILITHIUM)
+/* Decode a DER ASN.1 length field at *ppos, advance *ppos. */
+static word32 DcdDecodeLen(const byte *data, word32 *ppos)
+{
+    word32 pos = *ppos;
+    byte b = data[pos++];
+    word32 len = 0;
+    if (b & 0x80) {
+        int ll = b & 0x7f;
+        for (int i = 0; i < ll; i++)
+            len = (len << 8) | data[pos++];
+    } else {
+        len = b;
+    }
+    *ppos = pos;
+    return len;
+}
+
+/* Write DER length bytes into out[], return number of bytes written. */
+static int DcdWriteLen(byte *out, word32 len)
+{
+    if (len < 128) {
+        out[0] = (byte)len;
+        return 1;
+    }
+    else if (len < 256) {
+        out[0] = 0x81; out[1] = (byte)len;
+        return 2;
+    }
+    else {
+        out[0] = 0x82;
+        out[1] = (byte)(len >> 8);
+        out[2] = (byte)(len & 0xff);
+        return 3;
+    }
+}
+
+/* Parse DCD content fields and verify the delta certificate's ML-DSA signature.
+ *
+ * dcdContent    – pointer to first byte of DeltaCertDescriptor SEQUENCE content
+ * dcdContentLen – length of that content
+ *
+ * Returns 0 on success, negative on verification failure, WC_NO_ERR_TRACE(NOT_COMPILED_IN)
+ * if no PQ ICA signer was found (treated as non-fatal by caller). */
+static int VerifyChameleonDeltaSignature(WOLFSSL        *ssl,
+                                         const byte     *dcdContent,
+                                         word32          dcdContentLen)
+{
+    word32 p = 0;
+
+    /* Pointers into dcdContent for each field */
+    const byte *serial_start    = NULL;  word32 serial_total  = 0;
+    const byte *sigalg_content  = NULL;  word32 sigalg_len    = 0;
+    const byte *issuer_content  = NULL;  word32 issuer_len    = 0;
+    const byte *validity_content= NULL;  word32 validity_len  = 0;
+    const byte *subject_content = NULL;  word32 subject_len   = 0;
+    const byte *spki_start      = NULL;  word32 spki_total    = 0;
+    const byte *ext_content     = NULL;  word32 ext_len       = 0;
+    const byte *sigval_content  = NULL;  word32 sigval_len    = 0;
+    int         spki_seen       = 0;     /* track first SEQUENCE = SPKI */
+
+    /* Walk DCD fields */
+    while (p < dcdContentLen) {
+        const byte *fStart = dcdContent + p;
+        byte ftag = dcdContent[p++];
+        word32 flen = DcdDecodeLen(dcdContent, &p);
+        const byte *fcontent = dcdContent + p;
+
+        switch (ftag) {
+            case 0x02: /* INTEGER – serial number (raw DER incl. tag+len) */
+                serial_start = fStart;
+                serial_total = (word32)(fcontent + flen - fStart);
+                break;
+            case 0xa0: /* [0] – signature AlgorithmIdentifier (content = AlgId SEQUENCE) */
+                sigalg_content = fcontent;
+                sigalg_len     = flen;
+                break;
+            case 0xa1: /* [1] – issuer Name */
+                issuer_content = fcontent;
+                issuer_len     = flen;
+                break;
+            case 0xa2: /* [2] – validity */
+                validity_content = fcontent;
+                validity_len     = flen;
+                break;
+            case 0xa3: /* [3] – subject Name */
+                subject_content = fcontent;
+                subject_len     = flen;
+                break;
+            case 0x30: /* SEQUENCE – first one is SubjectPublicKeyInfo */
+                if (!spki_seen) {
+                    spki_start = fStart;
+                    spki_total = (word32)(fcontent + flen - fStart);
+                    spki_seen  = 1;
+                }
+                break;
+            case 0xa4: /* [4] – extensions */
+                ext_content = fcontent;
+                ext_len     = flen;
+                break;
+            case 0x03: /* BIT STRING – signatureValue */
+                sigval_content = fcontent;
+                sigval_len     = flen;
+                break;
+            default:
+                break;
+        }
+        p += flen;
+    }
+
+    if (sigval_content == NULL || spki_start == NULL || issuer_content == NULL) {
+        WOLFSSL_MSG("[Chameleon] DCD missing required fields");
+        return BAD_FUNC_ARG;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Find PQ ICA signer by issuer name hash                              */
+    /* ------------------------------------------------------------------ */
+    byte issuerHash[SIGNER_DIGEST_SIZE];
+    if (CalcHashId(issuer_content, issuer_len, issuerHash) != 0) {
+        WOLFSSL_MSG("[Chameleon] CalcHashId for DCD issuer failed");
+        return BAD_FUNC_ARG;
+    }
+    Signer *ca = GetCAByName(SSL_CM(ssl), issuerHash);
+    if (ca == NULL)
+        ca = GetCA(SSL_CM(ssl), issuerHash);
+    if (ca == NULL) {
+        WOLFSSL_MSG("[Chameleon] PQ ICA signer not found, skipping delta verify");
+        return WC_NO_ERR_TRACE(NOT_COMPILED_IN); /* non-fatal */
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Reconstruct delta TBSCertificate                                    */
+    /* TBSCertificate ::= SEQUENCE {                                       */
+    /*   [0] EXPLICIT INTEGER(2)  -- version v3                            */
+    /*   INTEGER                  -- serial (from DCD)                     */
+    /*   AlgorithmIdentifier      -- signature (DCD [a0] content)          */
+    /*   Name                     -- issuer   (DCD [a1] content)           */
+    /*   Validity                 -- validity (DCD [a2] content)           */
+    /*   Name                     -- subject  (DCD [a3] content)           */
+    /*   SubjectPublicKeyInfo     -- SPKI     (DCD first SEQUENCE)         */
+    /*   [3] EXPLICIT Extensions  -- extensions (DCD [a4] content)         */
+    /* }                                                                   */
+    /* ------------------------------------------------------------------ */
+    static const byte kVersionV3[] = {0xa0, 0x03, 0x02, 0x01, 0x02};
+
+    /* Compute [3] EXPLICIT extensions wrapper size */
+    word32 extWrapSz = 0;
+    if (ext_content != NULL && ext_len > 0) {
+        int lsz = ext_len < 128 ? 1 : ext_len < 256 ? 2 : 3;
+        extWrapSz = 1 + (word32)lsz + ext_len; /* a3 + len + content */
+    }
+
+    word32 tbsContentSz =
+        (word32)sizeof(kVersionV3)  /* version       */
+        + serial_total               /* serial        */
+        + sigalg_len                 /* sigAlgId      */
+        + issuer_len                 /* issuer        */
+        + validity_len               /* validity      */
+        + subject_len                /* subject       */
+        + spki_total                 /* SPKI          */
+        + extWrapSz;                 /* extensions    */
+
+    int hdrSz = 1 + (tbsContentSz < 128 ? 1 : tbsContentSz < 256 ? 2 : 3);
+    word32 tbsTotalSz = (word32)hdrSz + tbsContentSz;
+
+    byte *tbsBuf = (byte*)XMALLOC(tbsTotalSz, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+    if (tbsBuf == NULL)
+        return MEMORY_E;
+
+    word32 idx = 0;
+    /* Outer SEQUENCE header */
+    tbsBuf[idx++] = 0x30;
+    idx += (word32)DcdWriteLen(tbsBuf + idx, tbsContentSz);
+    /* version */
+    XMEMCPY(tbsBuf + idx, kVersionV3, sizeof(kVersionV3));
+    idx += (word32)sizeof(kVersionV3);
+    /* serial */
+    XMEMCPY(tbsBuf + idx, serial_start, serial_total);
+    idx += serial_total;
+    /* signature AlgorithmIdentifier */
+    XMEMCPY(tbsBuf + idx, sigalg_content, sigalg_len);
+    idx += sigalg_len;
+    /* issuer */
+    XMEMCPY(tbsBuf + idx, issuer_content, issuer_len);
+    idx += issuer_len;
+    /* validity */
+    if (validity_content != NULL && validity_len > 0) {
+        XMEMCPY(tbsBuf + idx, validity_content, validity_len);
+        idx += validity_len;
+    }
+    /* subject */
+    if (subject_content != NULL && subject_len > 0) {
+        XMEMCPY(tbsBuf + idx, subject_content, subject_len);
+        idx += subject_len;
+    }
+    /* SPKI */
+    XMEMCPY(tbsBuf + idx, spki_start, spki_total);
+    idx += spki_total;
+    /* extensions [3] EXPLICIT */
+    if (ext_content != NULL && ext_len > 0) {
+        tbsBuf[idx++] = 0xa3;
+        idx += (word32)DcdWriteLen(tbsBuf + idx, ext_len);
+        XMEMCPY(tbsBuf + idx, ext_content, ext_len);
+        idx += ext_len;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Verify delta cert signature                                          */
+    /* BIT STRING first byte = unused-bits count (0x00), skip it.         */
+    /* ------------------------------------------------------------------ */
+    if (sigval_len < 2) {
+        XFREE(tbsBuf, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+        return ASN_PARSE_E;
+    }
+    const byte *sigBytes = sigval_content + 1; /* skip 0x00 unused-bits */
+    word32      sigLen   = sigval_len - 1;
+
+    SignatureCtx sigCtx;
+    InitSignatureCtx(&sigCtx, ssl->heap, ssl->devId);
+
+    int ret = ConfirmSignature(&sigCtx,
+                               tbsBuf, idx,
+                               ca->publicKey, ca->pubKeySize, ca->keyOID,
+                               sigBytes, sigLen, ca->keyOID,
+                               NULL, 0, NULL);
+    FreeSignatureCtx(&sigCtx);
+    XFREE(tbsBuf, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+
+    if (ret == 0) {
+        printf("[TLS] Chameleon delta cert ML-DSA sig OK (issuer keyOID=%u)\r\n",
+               ca->keyOID);
+    } else {
+        printf("[TLS] Chameleon delta cert ML-DSA sig FAILED: %d\r\n", ret);
+    }
+    return ret;
+}
+#endif /* WOLFSSL_HYBRID_CERT && HAVE_DILITHIUM */
+
 int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                      word32 totalSz)
 {
@@ -16948,9 +17228,157 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                         break;
                     }
                 #endif /* HAVE_DILITHIUM */
+                #ifdef WOLFSSL_COMPOSITE_CERTS
+                    case COMPOSITE_L1k:
+                    case COMPOSITE_L3k:
+                    case COMPOSITE_L5k:
+                    {
+                        /* Store the raw composite public key bytes in
+                         * ssl->peerCompositePubKey for use in
+                         * DoTls13CertificateVerify. */
+                        if (ssl->peerCompositePubKey) {
+                            XFREE(ssl->peerCompositePubKey,
+                                  ssl->heap, DYNAMIC_TYPE_ECC);
+                        }
+                        ssl->peerCompositePubKey =
+                            (byte*)XMALLOC(args->dCert->pubKeySize,
+                                           ssl->heap, DYNAMIC_TYPE_ECC);
+                        if (ssl->peerCompositePubKey == NULL) {
+                            ERROR_OUT(MEMORY_ERROR, exit_ppc);
+                        }
+                        XMEMCPY(ssl->peerCompositePubKey,
+                                args->dCert->publicKey,
+                                args->dCert->pubKeySize);
+                        ssl->peerCompositePubKeySz = args->dCert->pubKeySize;
+                        /* Allocate a dummy ECC key structure so peerEccDsaKeyPresent
+                         * can be set; the CV code checks peerEccDsaKeyPresent. */
+                        if (ssl->peerEccDsaKey == NULL) {
+                            AllocKey(ssl, DYNAMIC_TYPE_ECC,
+                                     (void**)&ssl->peerEccDsaKey);
+                        }
+                        if (ssl->peerEccDsaKey != NULL) {
+                            ssl->peerEccDsaKeyPresent = 1;
+                        }
+                        break;
+                    }
+                #endif /* WOLFSSL_COMPOSITE_CERTS */
                     default:
                         break;
                 }
+
+#if defined(WOLFSSL_HYBRID_CERT) && defined(HAVE_DILITHIUM)
+                /* Store peer ML-DSA SAPKI for PQCertificateVerify and verify
+                 * the PQ signature chain:
+                 *   Catalyst:  WOLFSSL_DUAL_ALG_CERTS populates dCert->sapkiDer.
+                 *   Chameleon: parse DCD extension, extract SPKI, verify delta
+                 *              cert ML-DSA signature against PQ ICA. */
+                if (ssl->peerSapkiDer == NULL) {
+#ifdef WOLFSSL_DUAL_ALG_CERTS
+                    /* Catalyst: sapkiDer already decoded by ParseCertRelative */
+                    if (args->dCert->extSapkiSet &&
+                        args->dCert->sapkiDer != NULL &&
+                        args->dCert->sapkiLen > 0) {
+                        ssl->peerSapkiDer = (byte*)XMALLOC(args->dCert->sapkiLen,
+                                             ssl->heap, DYNAMIC_TYPE_PUBLIC_KEY);
+                        if (ssl->peerSapkiDer != NULL) {
+                            XMEMCPY(ssl->peerSapkiDer, args->dCert->sapkiDer,
+                                    args->dCert->sapkiLen);
+                            ssl->peerSapkiLen = args->dCert->sapkiLen;
+                            printf("[TLS] Stored peer SAPKI from Catalyst cert (%d bytes)\r\n",
+                                   ssl->peerSapkiLen);
+                        }
+                    }
+#endif /* WOLFSSL_DUAL_ALG_CERTS */
+                    /* Chameleon: parse DCD extension */
+                    if (ssl->peerSapkiDer == NULL &&
+                        ssl->ctx != NULL &&
+                        ssl->ctx->hybridCertType == HYBCERT_CHAMELEON) {
+                        /* DCD OID: 2.16.840.1.114027.80.6.1 */
+                        static const byte kDcdOid[] = {
+                            0x06, 0x0a,
+                            0x60, 0x86, 0x48, 0x01, 0x86, 0xfa, 0x6b, 0x50, 0x06, 0x01
+                        };
+                        const byte *src    = args->dCert->source;
+                        word32      srcLen = args->dCert->maxIdx;
+                        const byte *found  = NULL;
+
+                        for (word32 si = 0; si + sizeof(kDcdOid) <= srcLen; si++) {
+                            if (XMEMCMP(src + si, kDcdOid, sizeof(kDcdOid)) == 0) {
+                                found = src + si + sizeof(kDcdOid);
+                                break;
+                            }
+                        }
+                        if (found != NULL) {
+                            const byte *p = found;
+                            /* Expect OCTET STRING wrapping the DCD */
+                            if (*p == 0x04) {
+                                word32 pos = 1;
+                                word32 octLen = DcdDecodeLen(p, &pos);
+                                p += pos;
+                                (void)octLen;
+
+                                /* Expect outer DCD SEQUENCE */
+                                if (*p == 0x30) {
+                                    p++; pos = 0;
+                                    word32 dcdLen = DcdDecodeLen(p, &pos);
+                                    p += pos;
+                                    const byte *dcdContent = p;
+                                    word32      dcdContentLen = dcdLen;
+
+                                    /* ---- Extract SPKI for PQCertificateVerify ---- */
+                                    /* Walk fields to find first SEQUENCE (SPKI) */
+                                    const byte *wp = dcdContent;
+                                    word32 wpEnd = dcdContentLen;
+                                    while ((word32)(wp - dcdContent) < wpEnd) {
+                                        const byte *fStart = wp;
+                                        byte ftag = *wp++;
+                                        word32 fpos = 0;
+                                        word32 flen = DcdDecodeLen(wp, &fpos);
+                                        wp += fpos;
+                                        if (ftag == 0x30) {
+                                            /* First SEQUENCE = SubjectPublicKeyInfo */
+                                            word32 spkiTotal =
+                                                (word32)(wp + flen - fStart);
+                                            ssl->peerSapkiDer =
+                                                (byte*)XMALLOC(spkiTotal,
+                                                    ssl->heap,
+                                                    DYNAMIC_TYPE_PUBLIC_KEY);
+                                            if (ssl->peerSapkiDer != NULL) {
+                                                XMEMCPY(ssl->peerSapkiDer,
+                                                        fStart, spkiTotal);
+                                                ssl->peerSapkiLen = (int)spkiTotal;
+                                                printf("[TLS] Stored peer SAPKI "
+                                                       "from Chameleon DCD "
+                                                       "(%d bytes)\r\n",
+                                                       ssl->peerSapkiLen);
+                                            }
+                                            break;
+                                        }
+                                        wp += flen;
+                                    }
+
+                                    /* ---- Verify delta cert ML-DSA signature ---- */
+                                    {
+                                        int dret = VerifyChameleonDeltaSignature(
+                                                        ssl,
+                                                        dcdContent,
+                                                        dcdContentLen);
+                                        if (dret != 0 &&
+                                            dret != WC_NO_ERR_TRACE(NOT_COMPILED_IN)) {
+                                            /* Hard failure: delta cert sig invalid */
+                                            printf("[TLS] Chameleon delta cert "
+                                                   "verification failed: %d\r\n",
+                                                   dret);
+                                            ret = dret;
+                                            args->fatal = 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+#endif /* WOLFSSL_HYBRID_CERT && HAVE_DILITHIUM */
 
                 /* args->dCert free'd in function cleanup after callback */
             } /* if (count > 0) */

@@ -208,6 +208,18 @@ enum Key_Sum {
     SPHINCS_SMALL_LEVEL3k       = 285,           /* 1.3.9999.6.8.7 */
     /* 0x2b,0xce,0x0f,0x06,0x09,0x07  */
     SPHINCS_SMALL_LEVEL5k       = 286            /* 1.3.9999.6.9.7 */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* OQS composite hybrid keys.  NOTE: WOLFSSL_OLD_OID_SUM is NOT
+     * compatible with WOLFSSL_COMPOSITE_CERTS (sum 276 collides with
+     * FALCON_LEVEL5k).  These placeholder values prevent collisions but
+     * the OID matching will fail in old-sum mode. */
+    /* 0x2b,0xce,0x0f,0x07,0x05 old-sum=276 → placeholder 0x113 */
+    , COMPOSITE_L1k             = 0x113          /* 1.3.9999.7.5 p256_mldsa44 */
+    /* 0x2b,0xce,0x0f,0x07,0x07 old-sum=278 */
+    , COMPOSITE_L3k             = 278            /* 1.3.9999.7.7 p384_mldsa65 */
+    /* 0x2b,0xce,0x0f,0x07,0x08 old-sum=279 */
+    , COMPOSITE_L5k             = 279            /* 1.3.9999.7.8 p521_mldsa87 */
+#endif
 #else
     /* 0x00  */
     ANONk                       = 0x7fffffff,    /* 0.0 */
@@ -261,6 +273,15 @@ enum Key_Sum {
     SPHINCS_SMALL_LEVEL3k       = 0x06f0c923,    /* 1.3.9999.6.8.7 */
     /* 0x2b,0xce,0x0f,0x06,0x09,0x07  */
     SPHINCS_SMALL_LEVEL5k       = 0x06f0c922     /* 1.3.9999.6.9.7 */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* OQS composite hybrid key OIDs (new XOR-sum mode) */
+    /* 0x2b,0xce,0x0f,0x07,0x05 */
+    , COMPOSITE_L1k             = 0x780f312e     /* 1.3.9999.7.5 p256_mldsa44 */
+    /* 0x2b,0xce,0x0f,0x07,0x07 */
+    , COMPOSITE_L3k             = 0x780f312c     /* 1.3.9999.7.7 p384_mldsa65 */
+    /* 0x2b,0xce,0x0f,0x07,0x08 */
+    , COMPOSITE_L5k             = 0x780f3123     /* 1.3.9999.7.8 p521_mldsa87 */
+#endif
 #endif
 };
 
@@ -1584,6 +1605,12 @@ enum Ctc_SigType {
     CTC_SPHINCS_SMALL_LEVEL3    = 285,           /* 1.3.9999.6.8.7 */
     /* 0x2b,0xce,0x0f,0x06,0x09,0x07  */
     CTC_SPHINCS_SMALL_LEVEL5    = 286            /* 1.3.9999.6.9.7 */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* old-sum: composite L1=276 collides w/ CTC_FALCON_LEVEL5; placeholders only */
+    , CTC_COMPOSITE_L1          = 0x113          /* 1.3.9999.7.5 p256_mldsa44 */
+    , CTC_COMPOSITE_L3          = 278            /* 1.3.9999.7.7 p384_mldsa65 */
+    , CTC_COMPOSITE_L5          = 279            /* 1.3.9999.7.8 p521_mldsa87 */
+#endif
 #else
     /* 0x2a,0x86,0x48,0xce,0x38,0x04,0x03  */
     CTC_SHAwDSA                 = 0x314b8212,    /* 1.2.840.10040.4.3 */
@@ -1665,6 +1692,14 @@ enum Ctc_SigType {
     CTC_SPHINCS_SMALL_LEVEL3    = 0x06f0c923,    /* 1.3.9999.6.8.7 */
     /* 0x2b,0xce,0x0f,0x06,0x09,0x07  */
     CTC_SPHINCS_SMALL_LEVEL5    = 0x06f0c922     /* 1.3.9999.6.9.7 */
+#ifdef WOLFSSL_COMPOSITE_CERTS
+    /* 0x2b,0xce,0x0f,0x07,0x05 */
+    , CTC_COMPOSITE_L1          = 0x780f312e     /* 1.3.9999.7.5 p256_mldsa44 */
+    /* 0x2b,0xce,0x0f,0x07,0x07 */
+    , CTC_COMPOSITE_L3          = 0x780f312c     /* 1.3.9999.7.7 p384_mldsa65 */
+    /* 0x2b,0xce,0x0f,0x07,0x08 */
+    , CTC_COMPOSITE_L5          = 0x780f3123     /* 1.3.9999.7.8 p521_mldsa87 */
+#endif
 #endif
 };
 
