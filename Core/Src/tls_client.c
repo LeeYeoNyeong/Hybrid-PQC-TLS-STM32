@@ -32,6 +32,20 @@
 /* ── extern from lwip.c ── */
 extern struct netif gnetif;
 
+/* ── Per-message handshake timing (from tls13.c) ── */
+extern volatile uint32_t g_tls_t_server_hello_ms;
+extern volatile uint32_t g_tls_t_cert_ms;
+extern volatile uint32_t g_tls_t_cert_verify_ms;
+extern volatile uint32_t g_tls_t_pq_cert_verify_ms;
+extern volatile uint32_t g_tls_t_finished_ms;
+void tls13_set_tick_fn(uint32_t (*fn)(void));
+
+/* Cert-parse sub-timing (set from internal.c) */
+extern volatile uint32_t g_cert_t_primary_ms;
+extern volatile uint32_t g_cert_t_pq_ms;
+extern volatile uint32_t g_cert_t_leaf_ms;
+extern volatile uint32_t g_cert_t_hash_ms;
+
 /* ================================================================
  * Minimal SNTP client + wolfSSL time callback
  * ================================================================ */
@@ -1724,29 +1738,147 @@ typedef struct {
     SecurityLevel level;
     const char   *ca_pem;
     unsigned int  ca_pem_size;   /* strlen, NOT including final \0 */
+    const char   *ca_pem_alt;
+    unsigned int  ca_pem_alt_size;
     uint8_t       hybrid_cert_type;  /* HYBCERT_NONE/CATALYST/CHAMELEON */
+    uint8_t       cks_sig_spec;      /* 0 or WOLFSSL_CKS_SIGSPEC_* */
+    uint8_t       require_related;   /* post-handshake RelatedCertificate check */
     uint16_t      port;          /* 0 = use TLS_SERVER_PORT default */
 } Scenario;
 
+#define RELATED_CERT_OID "1.3.6.1.5.5.7.1.36"
+
 static const Scenario g_scenarios[] = {
-    { "ECDSA_L1",   CERT_ECDSA,    SEC_LEVEL_1, CA_ECDSA_L1,    sizeof(CA_ECDSA_L1)    - 1, HYBCERT_NONE, 0 },
-    { "ECDSA_L3",   CERT_ECDSA,    SEC_LEVEL_3, CA_ECDSA_L3,    sizeof(CA_ECDSA_L3)    - 1, HYBCERT_NONE, 0 },
-    { "ECDSA_L5",   CERT_ECDSA,    SEC_LEVEL_5, CA_ECDSA_L5,    sizeof(CA_ECDSA_L5)    - 1, HYBCERT_NONE, 0 },
-    { "MLDSA_L1",   CERT_MLDSA,    SEC_LEVEL_1, CA_MLDSA_L1,    sizeof(CA_MLDSA_L1)    - 1, HYBCERT_NONE, 0 },
-    { "MLDSA_L3",   CERT_MLDSA,    SEC_LEVEL_3, CA_MLDSA_L3,    sizeof(CA_MLDSA_L3)    - 1, HYBCERT_NONE, 0 },
-    { "MLDSA_L5",   CERT_MLDSA,    SEC_LEVEL_5, CA_MLDSA_L5,    sizeof(CA_MLDSA_L5)    - 1, HYBCERT_NONE, 0 },
-    { "CATALYST_L1",  CERT_CATALYST,  SEC_LEVEL_1, CA_CATALYST_L1,  sizeof(CA_CATALYST_L1)  - 1, HYBCERT_CATALYST,  0 },
-    { "CATALYST_L3",  CERT_CATALYST,  SEC_LEVEL_3, CA_CATALYST_L3,  sizeof(CA_CATALYST_L3)  - 1, HYBCERT_CATALYST,  0 },
-    { "CATALYST_L5",  CERT_CATALYST,  SEC_LEVEL_5, CA_CATALYST_L5,  sizeof(CA_CATALYST_L5)  - 1, HYBCERT_CATALYST,  0 },
-    { "CHAMELEON_L1", CERT_CHAMELEON, SEC_LEVEL_1, CA_CHAMELEON_L1, sizeof(CA_CHAMELEON_L1) - 1, HYBCERT_CHAMELEON, 0 },
-    { "CHAMELEON_L3", CERT_CHAMELEON, SEC_LEVEL_3, CA_CHAMELEON_L3, sizeof(CA_CHAMELEON_L3) - 1, HYBCERT_CHAMELEON, 0 },
-    { "CHAMELEON_L5", CERT_CHAMELEON, SEC_LEVEL_5, CA_CHAMELEON_L5, sizeof(CA_CHAMELEON_L5) - 1, HYBCERT_CHAMELEON, 0 },
-    /* Composite (OQS-composite): served by OpenSSL+oqsprovider on port 14433 */
-    { "COMPOSITE_L1", CERT_COMPOSITE, SEC_LEVEL_1, CA_COMPOSITE_L1, sizeof(CA_COMPOSITE_L1) - 1, HYBCERT_NONE, 14433 },
-    { "COMPOSITE_L3", CERT_COMPOSITE, SEC_LEVEL_3, CA_COMPOSITE_L3, sizeof(CA_COMPOSITE_L3) - 1, HYBCERT_NONE, 14433 },
-    { "COMPOSITE_L5", CERT_COMPOSITE, SEC_LEVEL_5, CA_COMPOSITE_L5, sizeof(CA_COMPOSITE_L5) - 1, HYBCERT_NONE, 14433 },
+    /* ECDSA: ports 11101/11103/11105 */
+    { "ECDSA_L1",   CERT_ECDSA,    SEC_LEVEL_1, CA_ECDSA_L1,    sizeof(CA_ECDSA_L1)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11101 },
+    { "ECDSA_L3",   CERT_ECDSA,    SEC_LEVEL_3, CA_ECDSA_L3,    sizeof(CA_ECDSA_L3)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11103 },
+    { "ECDSA_L5",   CERT_ECDSA,    SEC_LEVEL_5, CA_ECDSA_L5,    sizeof(CA_ECDSA_L5)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11105 },
+    /* ML-DSA (pure PQC): ports 11111/11113/11115 */
+    { "MLDSA_L1",   CERT_MLDSA,    SEC_LEVEL_1, CA_MLDSA_L1,    sizeof(CA_MLDSA_L1)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11111 },
+    { "MLDSA_L3",   CERT_MLDSA,    SEC_LEVEL_3, CA_MLDSA_L3,    sizeof(CA_MLDSA_L3)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11113 },
+    { "MLDSA_L5",   CERT_MLDSA,    SEC_LEVEL_5, CA_MLDSA_L5,    sizeof(CA_MLDSA_L5)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11115 },
+    /* Related: ports 11141/11143/11145
+     * Server sends ML-DSA chain which carries RelatedCertificate extension (OID 1.3.6.1.5.5.7.1.36)
+     * binding it to the corresponding ECDSA cert. Client verifies ML-DSA chain + checks extension. */
+    /* RELATED: ECDSA chain (primary) + ML-DSA chain (PQ, has RelatedCertificate ext)
+     * Both chains sent in one Certificate message with 0x000000 delimiter.
+     * Both CAs loaded so wolfSSL can verify both ECDSA and PQ chain. */
+    { "RELATED_L1", CERT_RELATED, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, CA_MLDSA_L1, sizeof(CA_MLDSA_L1) - 1, HYBCERT_NONE, 0, 1, 11141 },
+    { "RELATED_L3", CERT_RELATED, SEC_LEVEL_3, CA_ECDSA_L3, sizeof(CA_ECDSA_L3) - 1, CA_MLDSA_L3, sizeof(CA_MLDSA_L3) - 1, HYBCERT_NONE, 0, 1, 11143 },
+    { "RELATED_L5", CERT_RELATED, SEC_LEVEL_5, CA_ECDSA_L5, sizeof(CA_ECDSA_L5) - 1, CA_MLDSA_L5, sizeof(CA_MLDSA_L5) - 1, HYBCERT_NONE, 0, 1, 11145 },
+    /* Catalyst: ports 11121/11123/11125  (EC cert + ML-DSA altkey → PQCertVerify) */
+    { "CATALYST_L1",  CERT_CATALYST,  SEC_LEVEL_1, CA_CATALYST_L1,  sizeof(CA_CATALYST_L1)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11121 },
+    { "CATALYST_L3",  CERT_CATALYST,  SEC_LEVEL_3, CA_CATALYST_L3,  sizeof(CA_CATALYST_L3)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11123 },
+    { "CATALYST_L5",  CERT_CATALYST,  SEC_LEVEL_5, CA_CATALYST_L5,  sizeof(CA_CATALYST_L5)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11125 },
+    /* Chameleon: ports 11131/11133/11135 (DCD hybrid cert; both chain paths verified) */
+    { "CHAMELEON_L1", CERT_CHAMELEON, SEC_LEVEL_1, CA_CHAMELEON_L1, sizeof(CA_CHAMELEON_L1) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11131 },
+    { "CHAMELEON_L3", CERT_CHAMELEON, SEC_LEVEL_3, CA_CHAMELEON_L3, sizeof(CA_CHAMELEON_L3) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11133 },
+    { "CHAMELEON_L5", CERT_CHAMELEON, SEC_LEVEL_5, CA_CHAMELEON_L5, sizeof(CA_CHAMELEON_L5) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11135 },
+    /* Dual: ports 11151/11153/11155
+     * Uses catalyst-style cert (ECDSA primary + ML-DSA SubjectAltPublicKeyInfo + ML-DSA altkey).
+     * Server sends both CertVerify (ECDSA) and PQCertVerify (ML-DSA). Client verifies both. */
+    /* DUAL: ECDSA chain (primary, CertVerify) + ML-DSA chain (PQCertVerify).
+     * Both chains sent in one Certificate message with 0x000000 delimiter.
+     * No SAPKI extension — ML-DSA pubkey comes from PQ chain leaf cert. */
+    { "DUAL_L1",    CERT_DUAL,    SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, CA_MLDSA_L1, sizeof(CA_MLDSA_L1) - 1, HYBCERT_NONE, 0, 0, 11151 },
+    { "DUAL_L3",    CERT_DUAL,    SEC_LEVEL_3, CA_ECDSA_L3, sizeof(CA_ECDSA_L3) - 1, CA_MLDSA_L3, sizeof(CA_MLDSA_L3) - 1, HYBCERT_NONE, 0, 0, 11153 },
+    { "DUAL_L5",    CERT_DUAL,    SEC_LEVEL_5, CA_ECDSA_L5, sizeof(CA_ECDSA_L5) - 1, CA_MLDSA_L5, sizeof(CA_MLDSA_L5) - 1, HYBCERT_NONE, 0, 0, 11155 },
+    /* Composite: wolfSSL server ports 11161/11163/11165 */
+    { "COMPOSITE_L1", CERT_COMPOSITE, SEC_LEVEL_1, CA_COMPOSITE_L1, sizeof(CA_COMPOSITE_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11161 },
+    { "COMPOSITE_L3", CERT_COMPOSITE, SEC_LEVEL_3, CA_COMPOSITE_L3, sizeof(CA_COMPOSITE_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11163 },
+    { "COMPOSITE_L5", CERT_COMPOSITE, SEC_LEVEL_5, CA_COMPOSITE_L5, sizeof(CA_COMPOSITE_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11165 },
 };
 #define SCENARIO_COUNT  (sizeof(g_scenarios) / sizeof(g_scenarios[0]))
+
+void tls_get_scenario_ca(const char *name,
+                          const char **ca,     unsigned int *ca_sz,
+                          const char **ca_alt, unsigned int *ca_alt_sz)
+{
+    for (size_t i = 0; i < SCENARIO_COUNT; i++) {
+        if (strcmp(g_scenarios[i].name, name) == 0) {
+            if (ca)        *ca        = g_scenarios[i].ca_pem;
+            if (ca_sz)     *ca_sz     = g_scenarios[i].ca_pem_size;
+            if (ca_alt)    *ca_alt    = g_scenarios[i].ca_pem_alt;
+            if (ca_alt_sz) *ca_alt_sz = g_scenarios[i].ca_pem_alt_size;
+            return;
+        }
+    }
+    if (ca)        *ca        = NULL;
+    if (ca_sz)     *ca_sz     = 0;
+    if (ca_alt)    *ca_alt    = NULL;
+    if (ca_alt_sz) *ca_alt_sz = 0;
+}
+
+static int load_verify_ca(WOLFSSL_CTX *ctx, const char *pem, unsigned int pem_size)
+{
+    if (pem == NULL || pem_size == 0) {
+        return WOLFSSL_SUCCESS;
+    }
+
+    return wolfSSL_CTX_load_verify_buffer(ctx,
+            (const unsigned char *)pem,
+            (long)pem_size,
+            WOLFSSL_FILETYPE_PEM);
+}
+
+static int configure_scenario_ctx(WOLFSSL_CTX *ctx, const Scenario *sc)
+{
+    int ret;
+
+    ret = load_verify_ca(ctx, sc->ca_pem, sc->ca_pem_size);
+    if (ret != WOLFSSL_SUCCESS) {
+        return ret;
+    }
+
+    ret = load_verify_ca(ctx, sc->ca_pem_alt, sc->ca_pem_alt_size);
+    if (ret != WOLFSSL_SUCCESS) {
+        return ret;
+    }
+
+    if (sc->hybrid_cert_type != HYBCERT_NONE) {
+        wolfSSL_CTX_set_hybrid_cert_type(ctx, sc->hybrid_cert_type);
+    }
+
+    if (sc->cks_sig_spec != 0) {
+        byte spec = sc->cks_sig_spec;
+        ret = wolfSSL_CTX_UseCKS(ctx, &spec, 1);
+        if (ret != WOLFSSL_SUCCESS) {
+            return ret;
+        }
+    }
+
+    return WOLFSSL_SUCCESS;
+}
+
+
+static int validate_related_certificate_binding(WOLFSSL *ssl)
+{
+    /* Step 1: extension must be present (OID 1.3.6.1.5.5.7.1.36 found in PQ leaf) */
+    if (!wolfSSL_peer_has_related_cert(ssl)) {
+        printf("[TLS] related-cert FAIL: RelatedCertificate extension not found in PQ chain\n");
+        return 0;
+    }
+
+    /* Step 2: hash computed in ProcessPeerCerts must match primary cert hash.
+     * wolfSSL sets peerRelatedHashOk=1 inline when the OID is found:
+     *   hash(ECDSA leaf DER)  ==  hash stored in RelatedCertificate extension. */
+    if (!wolfSSL_peer_related_hash_ok(ssl)) {
+        printf("[TLS] related-cert FAIL: hash binding mismatch or parse error\n");
+        return 0;
+    }
+
+    printf("[TLS] related-cert OK: extension found + hash binding verified\n");
+    return 1;
+}
+
+static int validate_peer_policy(WOLFSSL *ssl, const Scenario *sc)
+{
+    if (sc->require_related) {
+        return validate_related_certificate_binding(ssl);
+    }
+
+    return 1;
+}
 
 /* ================================================================
  * Statistics helpers
@@ -1795,9 +1927,10 @@ static void calc_stats(const uint32_t *samples, int n, int errors, Stats *s)
 /* ================================================================
  * Single TLS handshake: returns elapsed ms, 0 on error
  * ================================================================ */
-static uint32_t do_handshake(WOLFSSL_CTX *ctx, uint16_t port)
+static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
 {
     static int hs_count = 0;
+    uint16_t port = sc->port;
     if (port == 0) port = TLS_SERVER_PORT;
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -1818,15 +1951,35 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, uint16_t port)
 
     wolfSSL_set_fd(ssl, fd);
 
-    printf("\n------ Handshake #%d ------\n", ++hs_count);
+    /* Reset per-message timing before each handshake */
+    g_tls_t_server_hello_ms   = 0;
+    g_tls_t_cert_ms           = 0;
+    g_tls_t_cert_verify_ms    = 0;
+    g_tls_t_pq_cert_verify_ms = 0;
+    g_tls_t_finished_ms       = 0;
+    tls13_set_tick_fn(HAL_GetTick);
+
+    ++hs_count;
     uint32_t t_start = HAL_GetTick();
     int ret = wolfSSL_connect(ssl);
     uint32_t t_end   = HAL_GetTick();
 
     uint32_t elapsed = 0;
     if (ret == WOLFSSL_SUCCESS) {
-        elapsed = t_end - t_start;
-        printf("------ #%d OK (%lu ms) ------\n", hs_count, (unsigned long)elapsed);
+        if (!validate_peer_policy(ssl, sc)) {
+            printf("[TLS] peer policy validation failed for %s\n", sc->name);
+        } else {
+            elapsed = t_end - t_start;
+            if (hs_count <= 3) {
+                printf("  #%d OK %lu ms (SH=%lu C=%lu CV=%lu PQ=%lu F=%lu)\n",
+                       hs_count, (unsigned long)elapsed,
+                       (unsigned long)g_tls_t_server_hello_ms,
+                       (unsigned long)g_tls_t_cert_ms,
+                       (unsigned long)g_tls_t_cert_verify_ms,
+                       (unsigned long)g_tls_t_pq_cert_verify_ms,
+                       (unsigned long)g_tls_t_finished_ms);
+            }
+        }
     } else {
         int err = wolfSSL_get_error(ssl, ret);
         printf("[TLS] connect failed ret=%d err=%d heap_free=%lu heap_min=%lu\n",
@@ -1844,72 +1997,153 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, uint16_t port)
 /* ================================================================
  * Run one scenario: TLS_REPEAT_COUNT handshakes, print results
  * ================================================================ */
+/* Wait for ETH link + DHCP to be ready (up to timeout_ms).
+ * Returns 1 if ready, 0 if timeout. */
+static int wait_for_eth(uint32_t timeout_ms)
+{
+    uint32_t elapsed = 0;
+    while (elapsed < timeout_ms) {
+        if (netif_is_link_up(&gnetif) && gnetif.ip_addr.addr != 0)
+            return 1;
+        osDelay(500);
+        elapsed += 500;
+    }
+    return 0;
+}
+
 static void run_scenario(const Scenario *sc)
 {
     printf("\n[TLS] === %s ===\n", sc->name);
+
+    /* Ensure ETH link is up before starting — recover from transient drops */
+    if (!netif_is_link_up(&gnetif) || gnetif.ip_addr.addr == 0) {
+        printf("[TLS] ETH link down, waiting (up to 30s)...\n");
+        if (!wait_for_eth(30000)) {
+            printf("[TLS] ETH link timeout, skipping %s\n", sc->name);
+            return;
+        }
+        printf("[TLS] ETH link restored\n");
+        osDelay(500); /* short settle */
+    }
+
     printf("[TLS] Heap free=%lu min_ever=%lu\n",
            (unsigned long)xPortGetFreeHeapSize(),
            (unsigned long)xPortGetMinimumEverFreeHeapSize());
 
-    /* Build wolfSSL context */
     WOLFSSL_CTX *ctx = wolfSSL_CTX_new(wolfTLSv1_3_client_method());
-    if (!ctx) {
-        printf("[TLS] CTX alloc failed\n");
-        return;
-    }
+    if (!ctx) { printf("[TLS] CTX alloc failed\n"); return; }
+    /* COMPOSITE uses OQS-OpenSSL s_server with p256_mldsa* certs.
+     * wolfSSL composite chain verification is enabled: both ECDSA and ML-DSA
+     * components of each cert signature are verified (see asn.c COMPOSITE_L*k). */
     wolfSSL_CTX_set_verify(ctx, WOLFSSL_VERIFY_PEER, NULL);
 
-    /* Load CA cert from buffer (PEM) */
-    int ca_ret = wolfSSL_CTX_load_verify_buffer(ctx,
-            (const unsigned char *)sc->ca_pem,
-            (long)sc->ca_pem_size,
-            WOLFSSL_FILETYPE_PEM);
+    int ca_ret = configure_scenario_ctx(ctx, sc);
     if (ca_ret != WOLFSSL_SUCCESS) {
-        printf("[TLS] CA load failed ret=%d\n", ca_ret);
+        printf("[TLS] context setup failed ret=%d\n", ca_ret);
         wolfSSL_CTX_free(ctx);
         return;
     }
 
-    /* Set hybrid cert type (sends 0xFF10 extension in ClientHello) */
-    if (sc->hybrid_cert_type != HYBCERT_NONE)
-        wolfSSL_CTX_set_hybrid_cert_type(ctx, sc->hybrid_cert_type);
-
-    /* Measurement loop */
     uint32_t samples[TLS_REPEAT_COUNT];
+    uint32_t sh_ms[TLS_REPEAT_COUNT];    /* ServerHello cumul */
+    uint32_t cert_ms[TLS_REPEAT_COUNT];  /* Certificate cumul */
+    uint32_t cv_ms[TLS_REPEAT_COUNT];    /* CertVerify cumul */
+    uint32_t pqcv_ms[TLS_REPEAT_COUNT];  /* PQCertVerify cumul */
+    uint32_t fin_ms[TLS_REPEAT_COUNT];   /* Finished cumul */
+    /* Cert-parse sub-timing arrays */
+    uint32_t cp_primary[TLS_REPEAT_COUNT];
+    uint32_t cp_pq[TLS_REPEAT_COUNT];
+    uint32_t cp_leaf[TLS_REPEAT_COUNT];
+    uint32_t cp_hash[TLS_REPEAT_COUNT];
     memset(samples, 0, sizeof(samples));
+    memset(sh_ms,   0, sizeof(sh_ms));
+    memset(cert_ms, 0, sizeof(cert_ms));
+    memset(cv_ms,   0, sizeof(cv_ms));
+    memset(pqcv_ms, 0, sizeof(pqcv_ms));
+    memset(fin_ms,  0, sizeof(fin_ms));
+    memset(cp_primary, 0, sizeof(cp_primary));
+    memset(cp_pq,      0, sizeof(cp_pq));
+    memset(cp_leaf,    0, sizeof(cp_leaf));
+    memset(cp_hash,    0, sizeof(cp_hash));
     int errors = 0;
 
-    printf("[TLS] Running %d handshakes...\n", TLS_REPEAT_COUNT);
-    for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
-        uint32_t ms = do_handshake(ctx, sc->port);
-        samples[i]  = ms;
-        if (ms == 0) {
-            errors++;
-            if (errors == 1) {
-                /* Only print error detail once */
-                printf("[TLS] First error on handshake %d\n", i);
-            }
-            if (errors >= 3) break; /* stop early if all failing */
-        }
+    printf("[TLS] Running %d handshakes on port %u...\n",
+           TLS_REPEAT_COUNT, sc->port ? sc->port : TLS_SERVER_PORT);
 
-        /* Progress every 10 */
-        if ((i + 1) % 10 == 0) {
-            printf("[TLS] %d/%d done\n", i + 1, TLS_REPEAT_COUNT);
+    for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
+        uint32_t ms = do_handshake(ctx, sc);
+        samples[i] = ms;
+        if (ms > 0) {
+            sh_ms[i]   = g_tls_t_server_hello_ms;
+            cert_ms[i] = g_tls_t_cert_ms;
+            cv_ms[i]   = g_tls_t_cert_verify_ms;
+            pqcv_ms[i] = g_tls_t_pq_cert_verify_ms;
+            fin_ms[i]  = g_tls_t_finished_ms;
+            cp_primary[i] = g_cert_t_primary_ms;
+            cp_pq[i]      = g_cert_t_pq_ms;
+            cp_leaf[i]    = g_cert_t_leaf_ms;
+            cp_hash[i]    = g_cert_t_hash_ms;
+        } else {
+            errors++;
+            if (errors >= 3) break;
         }
-        osDelay(200); /* let server return to accept() before next connect */
+        if ((i + 1) % 5 == 0)
+            printf("[TLS] %d/%d\n", i + 1, TLS_REPEAT_COUNT);
+        osDelay(200);
     }
 
     wolfSSL_CTX_free(ctx);
 
-    /* Statistics */
+    /* Total handshake stats */
     Stats s;
     calc_stats(samples, TLS_REPEAT_COUNT, errors, &s);
 
+    /* Per-phase means from cumulative timestamps (compute incremental) */
+    int n = TLS_REPEAT_COUNT - errors;
+    float sum_sh = 0, sum_cert = 0, sum_cv = 0, sum_pqcv = 0, sum_fin = 0;
+    int   n_pqcv = 0;
+    for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
+        if (samples[i] == 0) continue;
+        sum_sh   += (float)sh_ms[i];
+        sum_cert += (float)(cert_ms[i] > sh_ms[i] ? cert_ms[i] - sh_ms[i] : 0);
+        sum_cv   += (float)(cv_ms[i]   > cert_ms[i] ? cv_ms[i] - cert_ms[i] : 0);
+        if (pqcv_ms[i] > 0) {
+            sum_pqcv += (float)(pqcv_ms[i] > cv_ms[i] ? pqcv_ms[i] - cv_ms[i] : 0);
+            n_pqcv++;
+        }
+        uint32_t last = (pqcv_ms[i] > 0) ? pqcv_ms[i] : cv_ms[i];
+        sum_fin  += (float)(fin_ms[i]  > last ? fin_ms[i] - last : 0);
+    }
+    if (n <= 0) n = 1;
+    float mean_sh   = sum_sh   / n;
+    float mean_cert = sum_cert / n;
+    float mean_cv   = sum_cv   / n;
+    float mean_pqcv = n_pqcv > 0 ? sum_pqcv / n_pqcv : 0.0f;
+    float mean_fin  = sum_fin  / n;
+
     printf("[TLS] --- Results: %s ---\n", sc->name);
     printf("[TLS] n=%d  errors=%d\n", TLS_REPEAT_COUNT, s.errors);
-    printf("[TLS] mean=%.2f ms  stddev=%.2f ms\n", s.mean_ms, s.stddev_ms);
-    printf("[TLS] 95%% CI=[%.2f, %.2f] ms\n", s.ci95_low_ms, s.ci95_high_ms);
-    printf("[TLS] min=%lu ms  max=%lu ms\n", s.min_ms, s.max_ms);
+    printf("[TLS] total  mean=%.1f ms  stddev=%.1f ms  95CI=[%.1f,%.1f]\n",
+           s.mean_ms, s.stddev_ms, s.ci95_low_ms, s.ci95_high_ms);
+    printf("[TLS] phases SrvHello=%.1f  Cert=%.1f  CertVfy=%.1f  PQCertVfy=%.1f  Finished=%.1f ms\n",
+           mean_sh, mean_cert, mean_cv, mean_pqcv, mean_fin);
+
+    /* Cert-parse sub-timing summary */
+    float sum_cp_primary = 0, sum_cp_pq = 0, sum_cp_leaf = 0, sum_cp_hash = 0;
+    int n_cp = 0;
+    for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
+        if (samples[i] == 0) continue;
+        sum_cp_primary += (float)cp_primary[i];
+        sum_cp_pq      += (float)cp_pq[i];
+        sum_cp_leaf    += (float)cp_leaf[i];
+        sum_cp_hash    += (float)cp_hash[i];
+        n_cp++;
+    }
+    if (n_cp > 0 && sum_cp_pq > 0) {
+        printf("[TLS] certparse primary=%.1f pq_block=%.1f pq_leaf=%.1f hash_bind=%.1f ms\n",
+               sum_cp_primary / n_cp, sum_cp_pq / n_cp,
+               sum_cp_leaf / n_cp, sum_cp_hash / n_cp);
+    }
 }
 
 /* ================================================================
@@ -1924,11 +2158,9 @@ static int probe_scenario(const Scenario *sc)
     wolfSSL_CTX_set_verify(ctx, WOLFSSL_VERIFY_PEER, NULL);
     int ok = 0;
 
-    int ca_ret = wolfSSL_CTX_load_verify_buffer(ctx,
-            (const unsigned char *)sc->ca_pem, (long)sc->ca_pem_size,
-            WOLFSSL_FILETYPE_PEM);
+    int ca_ret = configure_scenario_ctx(ctx, sc);
     if (ca_ret != WOLFSSL_SUCCESS) {
-        printf("[probe] %s: CA load failed ret=%d\n", sc->name, ca_ret);
+        printf("[probe] %s: context setup failed ret=%d\n", sc->name, ca_ret);
         wolfSSL_CTX_free(ctx);
         return 0;
     }
@@ -1954,8 +2186,9 @@ static int probe_scenario(const Scenario *sc)
         printf("\n====== [%s] TLS Handshake Start ======\n", sc->name);
         int ret = wolfSSL_connect(ssl);
         if (ret == WOLFSSL_SUCCESS) {
-            ok = 1;
-            printf("====== [%s] Handshake OK ======\n\n", sc->name);
+            ok = validate_peer_policy(ssl, sc);
+            printf("====== [%s] Handshake %s ======\n\n",
+                   sc->name, ok ? "OK" : "POLICY-FAIL");
         } else {
             int err = wolfSSL_get_error(ssl, ret);
             char ebuf[80];
@@ -2009,31 +2242,20 @@ void tls_perf_task(void *argument)
     sntp_sync();
     wc_SetTimeCb(ntp_time_cb);
 
-    printf("[TLS] Server: %s:%d\n", TLS_SERVER_IP, TLS_SERVER_PORT);
+    printf("[TLS] ============================================\n");
+    printf("[TLS]  PQC Hybrid TLS Benchmark (STM32F439 168MHz)\n");
+    printf("[TLS]  %u scenarios x %d handshakes\n", SCENARIO_COUNT, TLS_REPEAT_COUNT);
+    printf("[TLS] ============================================\n");
 
-    /* Auto-detect which scenario — debug ON so every handshake message is visible */
-    printf("[TLS] Probing server cert type...\n");
-    wolfSSL_Debugging_ON();
-    const Scenario *active = NULL;
     for (unsigned int i = 0; i < SCENARIO_COUNT; i++) {
-        printf("[TLS] Trying %s ...\n", g_scenarios[i].name);
-        if (probe_scenario(&g_scenarios[i])) {
-            printf("[TLS] MATCH: %s\n", g_scenarios[i].name);
-            active = &g_scenarios[i];
-            break;
-        }
-        printf("[TLS] no match\n");
-        osDelay(100);
-    }
-    wolfSSL_Debugging_OFF();   /* quiet during 30-handshake measurement */
-
-    if (active == NULL) {
-        printf("[TLS] No matching scenario found. Check server.\n");
-    } else {
-        run_scenario(active);
+        run_scenario(&g_scenarios[i]);
+        osDelay(300);
     }
 
-    printf("\n[TLS] Done.\n");
+    printf("\n[TLS] ============================================\n");
+    printf("[TLS] BENCHMARK COMPLETE\n");
+    printf("[TLS] ALL DONE\n");
+    printf("[TLS] ============================================\n");
 
     wolfSSL_Cleanup();
     for (;;) osDelay(portMAX_DELAY);

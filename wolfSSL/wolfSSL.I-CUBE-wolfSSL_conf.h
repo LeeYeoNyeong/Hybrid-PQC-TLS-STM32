@@ -411,6 +411,10 @@
     #if WOLF_CONF_MATH != 7
         #define WOLFSSL_SP_SMALL      /* use smaller version of code */
     #endif
+    /* PQC benchmark: disable SMALL to get fully-unrolled Cortex-M ASM for
+     * P-384/P-521. WOLFSSL_SP_SMALL halves code size but ~2x slower on
+     * Cortex-M4 due to loop overhead on large (17-limb) P-521 multiplications. */
+    #undef WOLFSSL_SP_SMALL
     #if defined(WOLF_CONF_RSA) && WOLF_CONF_RSA == 1
         #define WOLFSSL_HAVE_SP_RSA
         //#define WOLFSSL_SP_NO_2048
@@ -741,18 +745,21 @@
     #define WOLFSSL_SHA3
 #endif /* WOLF_CONF_KYBER */
 
-/* ML-DSA (Dilithium) – verify only, no key-gen or sign */
+/* ML-DSA (Dilithium) – keygen + sign + verify enabled for cert_bench_task */
 #undef  WOLFSSL_EXPERIMENTAL_SETTINGS
 #define WOLFSSL_EXPERIMENTAL_SETTINGS
 #undef  HAVE_DILITHIUM
 #define HAVE_DILITHIUM
 #undef  WOLFSSL_WC_DILITHIUM
 #define WOLFSSL_WC_DILITHIUM
-#define WOLFSSL_DILITHIUM_NO_MAKE_KEY
-/* Split ML-DSA-87 matrix A (56KB) and verify workspace (24KB) into
- * two separate heap allocations instead of one 80KB contiguous block.
- * Without this, verify fails with MEMORY_E on STM32F439 (172KB heap). */
-#define WC_DILITHIUM_CACHE_MATRIX_A
+/* WOLFSSL_DILITHIUM_NO_MAKE_KEY removed: cert_bench_task needs keygen */
+/* Use small-memory verification path: processes matrix A one column at a time
+ * using ~12KB peak instead of 57KB (cache) or 82KB (single block).
+ * This fixes CHAMELEON_L5 which fails with MEMORY_E when importing ML-DSA-87
+ * pubkey because heap is more depleted by the large DCD-extension leaf cert.
+ * WC_DILITHIUM_CACHE_MATRIX_A removed: redundant when VERIFY_SMALL_MEM is used
+ * (VERIFY_SMALL_MEM recomputes A per column; cached A is never used). */
+#define WOLFSSL_DILITHIUM_VERIFY_SMALL_MEM
 /* WOLFSSL_DILITHIUM_NO_SIGN removed: DUAL_ALG_CERTS needs ML-DSA verify via ConfirmSignature */
 /* SHAKE-128 and SHAKE-256 required by Dilithium */
 #undef  WOLFSSL_NO_SHAKE128
@@ -768,6 +775,8 @@
 #define WOLFSSL_HYBRID_CERT
 /* OQS composite hybrid certs (p256_mldsa44 / p384_mldsa65 / p521_mldsa87) */
 #define WOLFSSL_COMPOSITE_CERTS
+/* Enable peer cert chain access after handshake (needed for RelatedCertificate validation) */
+#define SESSION_CERTS
 
 /* ------------------------------------------------------------------------- */
 /* Crypto Acceleration */

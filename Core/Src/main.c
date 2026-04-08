@@ -81,6 +81,13 @@ const osThreadAttr_t tlsPerf_attributes = {
   .stack_size = 4096 * 4,
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
+/* Definitions for certBench — shares same stack budget as tlsPerf */
+osThreadId_t certBenchHandle;
+const osThreadAttr_t certBench_attributes = {
+  .name = "certBench",
+  .stack_size = 4096 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
+};
 /* USER CODE BEGIN PV */
 /* Retargets the C library printf function to the USART */
 int __io_putchar(int ch)
@@ -112,6 +119,7 @@ static void MX_HASH_Init(void);
 static void MX_RNG_Init(void);
 void StartDefaultTask(void *argument);
 extern void wolfCryptDemo(void *argument);
+extern void cert_bench_task(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -190,8 +198,17 @@ int main(void)
    * for Dilithium (~30 KB) verification buffers. */
   // wolfCryptHandle = osThreadNew(wolfCryptDemo, NULL, &wolfCrypt_attributes);
 
-  /* creation of tlsPerf */
+  /* ── Mode selection: run ONE of the two tasks below ──
+   *   TLS benchmark (measure_stm32.sh):
+   *     enable  tlsPerf   / disable certBench
+   *   Cert benchmark (measure_cert_bench.sh):
+   *     disable tlsPerf   / enable  certBench
+   */
+  /* creation of tlsPerf – TLS handshake benchmark */
   tlsPerfHandle = osThreadNew(tls_perf_task, NULL, &tlsPerf_attributes);
+
+  /* creation of certBench – cert size / ECDSA / ML-DSA benchmark */
+  // certBenchHandle = osThreadNew(cert_bench_task, NULL, &certBench_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

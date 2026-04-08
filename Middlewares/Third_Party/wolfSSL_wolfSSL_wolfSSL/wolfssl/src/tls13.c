@@ -161,6 +161,27 @@
  */
 #define ERROR_OUT(err, eLabel) { ret = (err); goto eLabel; }
 
+/* ── Per-message handshake timing (STM32 HAL_GetTick hook) ─────────────── */
+static uint32_t (*s_tls13_get_tick)(void) = NULL;
+void tls13_set_tick_fn(uint32_t (*fn)(void)) { s_tls13_get_tick = fn; }
+#define TLS13_TICK() (s_tls13_get_tick ? s_tls13_get_tick() : 0u)
+
+volatile uint32_t g_tls_t_server_hello_ms   = 0;
+volatile uint32_t g_tls_t_cert_ms           = 0;
+volatile uint32_t g_tls_t_cert_verify_ms    = 0;
+volatile uint32_t g_tls_t_pq_cert_verify_ms = 0;
+volatile uint32_t g_tls_t_finished_ms       = 0;
+
+/* Cert-parsing sub-timing (set from internal.c via tls13_tick_ms()) */
+volatile uint32_t g_cert_t_primary_ms  = 0; /* primary chain parse+verify */
+volatile uint32_t g_cert_t_pq_ms       = 0; /* entire PQ chain block */
+volatile uint32_t g_cert_t_leaf_ms     = 0; /* PQ leaf ParseCertRelative */
+volatile uint32_t g_cert_t_hash_ms     = 0; /* RelatedCert hash binding */
+
+/* Public tick accessor so internal.c can use the same clock */
+uint32_t tls13_tick_ms(void) { return TLS13_TICK(); }
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 /* Size of the TLS v1.3 label use when deriving keys. */
 #define TLS13_PROTOCOL_LABEL_SZ    6
 /* The protocol label for TLS v1.3. */
@@ -13057,11 +13078,14 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
     switch (type) {
 #ifndef NO_WOLFSSL_CLIENT
     /* Messages only received by client. */
-    case server_hello:
+    case server_hello: {
+        uint32_t _t0 = TLS13_TICK();
         WOLFSSL_MSG("processing server hello");
         ret = DoTls13ServerHello(ssl, input, inOutIdx, size, &type);
+        g_tls_t_server_hello_ms = TLS13_TICK() - _t0;
         if (ret == 0)
-            printf("[TLS] ServerHello received (%lu bytes)\r\n", (unsigned long)size);
+            printf("[TLS] ServerHello received (%lu bytes) [%lu ms]\r\n",
+                   (unsigned long)size, (unsigned long)g_tls_t_server_hello_ms);
     #if !defined(WOLFSSL_NO_CLIENT_AUTH) && \
                ((defined(HAVE_ED25519) && !defined(NO_ED25519_CLIENT_AUTH)) || \
                 (defined(HAVE_ED448) && !defined(NO_ED448_CLIENT_AUTH)))
@@ -13076,6 +13100,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
         }
     #endif
         break;
+    }
 
     case encrypted_extensions:
         WOLFSSL_MSG("processing encrypted extensions");
@@ -13166,41 +13191,64 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
     /* Messages received by both client and server. */
 #if !defined(NO_CERTS) && (!defined(NO_WOLFSSL_CLIENT) || \
                            !defined(WOLFSSL_NO_CLIENT_AUTH))
-    case certificate:
+    case certificate: {
+        uint32_t _t0 = TLS13_TICK();
+        /* Record absolute start tick so internal.c can compute primary_ms */
+        g_cert_t_primary_ms = _t0;
+        g_cert_t_pq_ms      = 0;
+        g_cert_t_leaf_ms    = 0;
+        g_cert_t_hash_ms    = 0;
         WOLFSSL_MSG("processing certificate");
         ret = DoTls13Certificate(ssl, input, inOutIdx, size);
+        g_tls_t_cert_ms = TLS13_TICK() - _t0;
         if (ret == 0)
-            printf("[TLS] Certificate received (%lu bytes)\r\n", (unsigned long)size);
+            printf("[TLS] Certificate received (%lu bytes) [%lu ms]\r\n",
+                   (unsigned long)size, (unsigned long)g_tls_t_cert_ms);
         break;
+    }
 #endif
 
 #if !defined(NO_RSA) || defined(HAVE_ECC) || defined(HAVE_ED25519) || \
     defined(HAVE_ED448) || defined(HAVE_FALCON) || defined(HAVE_DILITHIUM)
-    case certificate_verify:
+    case certificate_verify: {
+        uint32_t _t0 = TLS13_TICK();
         WOLFSSL_MSG("processing certificate verify");
         ret = DoTls13CertificateVerify(ssl, input, inOutIdx, size);
+        g_tls_t_cert_verify_ms = TLS13_TICK() - _t0;
         if (ret == 0)
-            printf("[TLS] CertificateVerify received (%lu bytes), verification OK\r\n", (unsigned long)size);
+            printf("[TLS] CertificateVerify received (%lu bytes), OK [%lu ms]\r\n",
+                   (unsigned long)size, (unsigned long)g_tls_t_cert_verify_ms);
         else
-            printf("[TLS] CertificateVerify FAILED (%lu bytes) err=%d\r\n", (unsigned long)size, ret);
+            printf("[TLS] CertificateVerify FAILED (%lu bytes) err=%d [%lu ms]\r\n",
+                   (unsigned long)size, ret, (unsigned long)g_tls_t_cert_verify_ms);
         break;
+    }
 #endif
 #ifdef WOLFSSL_HYBRID_CERT
-    case pq_certificate_verify:
+    case pq_certificate_verify: {
+        uint32_t _t0 = TLS13_TICK();
         WOLFSSL_MSG("processing pq certificate verify");
         ret = DoTls13PQCertificateVerify(ssl, input, inOutIdx, size);
+        g_tls_t_pq_cert_verify_ms = TLS13_TICK() - _t0;
         if (ret == 0)
-            printf("[TLS] PQCertificateVerify received (%lu bytes), verification OK\r\n", (unsigned long)size);
+            printf("[TLS] PQCertificateVerify received (%lu bytes), OK [%lu ms]\r\n",
+                   (unsigned long)size, (unsigned long)g_tls_t_pq_cert_verify_ms);
         else
-            printf("[TLS] PQCertificateVerify FAILED (%lu bytes) err=%d\r\n", (unsigned long)size, ret);
+            printf("[TLS] PQCertificateVerify FAILED (%lu bytes) err=%d [%lu ms]\r\n",
+                   (unsigned long)size, ret, (unsigned long)g_tls_t_pq_cert_verify_ms);
         break;
+    }
 #endif
-    case finished:
+    case finished: {
+        uint32_t _t0 = TLS13_TICK();
         WOLFSSL_MSG("processing finished");
         ret = DoTls13Finished(ssl, input, inOutIdx, size, totalSz, NO_SNIFF);
+        g_tls_t_finished_ms = TLS13_TICK() - _t0;
         if (ret == 0)
-            printf("[TLS] Finished received (%lu bytes)\r\n", (unsigned long)size);
+            printf("[TLS] Finished received (%lu bytes) [%lu ms]\r\n",
+                   (unsigned long)size, (unsigned long)g_tls_t_finished_ms);
         break;
+    }
 
     case key_update:
         WOLFSSL_MSG("processing key update");

@@ -21,3 +21,25 @@ void wolfSSL_CTX_set_hybrid_cert_type(WOLFSSL_CTX *ctx, uint8_t type)
     (void)type;
 #endif
 }
+
+int wolfSSL_peer_has_related_cert(WOLFSSL *ssl)
+{
+#ifdef WOLFSSL_HYBRID_CERT
+    if (ssl != NULL)
+        return ssl->peerHasRelatedCert ? 1 : 0;
+#else
+    (void)ssl;
+#endif
+    return 0;
+}
+
+int wolfSSL_peer_related_hash_ok(WOLFSSL *ssl)
+{
+#ifdef WOLFSSL_HYBRID_CERT
+    if (ssl != NULL)
+        return ssl->peerRelatedHashOk ? 1 : 0;
+#else
+    (void)ssl;
+#endif
+    return 0;
+}

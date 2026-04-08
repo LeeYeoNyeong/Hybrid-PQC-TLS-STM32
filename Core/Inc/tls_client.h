@@ -10,7 +10,7 @@ extern "C" {
 #define TLS_SERVER_PORT  11111
 
 /* ── Measurement configuration ── */
-#define TLS_REPEAT_COUNT  100
+#define TLS_REPEAT_COUNT  20
 
 /* ── Scenario definitions ── */
 typedef enum {
@@ -32,6 +32,11 @@ typedef enum {
 
 /* FreeRTOS task entry point */
 void tls_perf_task(void *argument);
+
+/* For cert_bench: returns root CA PEM(s) for a named scenario */
+void tls_get_scenario_ca(const char *name,
+                          const char **ca,     unsigned int *ca_sz,
+                          const char **ca_alt, unsigned int *ca_alt_sz);
 
 #ifdef __cplusplus
 }

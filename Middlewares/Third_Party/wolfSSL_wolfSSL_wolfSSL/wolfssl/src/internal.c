@@ -15806,6 +15806,282 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                 c24to32(input + args->idx, &certSz);
                 args->idx += OPAQUE24_LEN;
 
+#if defined(WOLFSSL_HYBRID_CERT) && defined(WOLFSSL_TLS13)
+                /* DUAL CHAIN: certSz == 0 is the 0x000000 delimiter that
+                 * separates the classical chain from the PQ chain in a
+                 * dual-certificate TLS 1.3 Certificate message. */
+                if (certSz == 0 && ssl->options.tls1_3 &&
+                    ssl->options.side == WOLFSSL_CLIENT_END) {
+                    extern volatile uint32_t g_cert_t_primary_ms;
+                    extern volatile uint32_t g_cert_t_pq_ms;
+                    extern volatile uint32_t g_cert_t_leaf_ms;
+                    extern volatile uint32_t g_cert_t_hash_ms;
+                    extern uint32_t tls13_tick_ms(void);
+                    /* g_cert_t_primary_ms was set to abs-tick at cert start
+                     * (in tls13.c), now convert to duration */
+                    uint32_t _now = tls13_tick_ms();
+                    g_cert_t_primary_ms = _now - g_cert_t_primary_ms;
+                    uint32_t _pq_t0 = _now;
+                    listSz -= CERT_HEADER_SZ; /* account for the 3-byte delimiter */
+
+                    /* Consume delimiter's empty extension (0x0000) */
+                    if ((args->idx - args->begin) + OPAQUE16_LEN <= totalSz) {
+                        word16 delimExtSz;
+                        ato16(input + args->idx, &delimExtSz);
+                        args->idx += OPAQUE16_LEN;
+                        if ((args->idx - args->begin) + delimExtSz <= totalSz)
+                            args->idx += delimExtSz;
+                        listSz -= OPAQUE16_LEN + delimExtSz;
+                    }
+
+                    /* Parse all PQ chain certs that follow the delimiter */
+                    {
+                        int pqLeafDone = 0;
+                        /* Saved PQ leaf pointer for post-loop verification
+                         * (must verify AFTER ICAs are loaded into CM) */
+                        const byte* pqSavedLeafDer = NULL;
+                        word32      pqSavedLeafSz   = 0;
+                        while (listSz >= CERT_HEADER_SZ) {
+                            word32 pqCertSz;
+                            const byte* pqCertDer;
+                            word16 pqExtSz;
+
+                            if ((args->idx - args->begin) + OPAQUE24_LEN > totalSz)
+                                break;
+                            c24to32(input + args->idx, &pqCertSz);
+                            args->idx += OPAQUE24_LEN;
+                            listSz -= CERT_HEADER_SZ;
+
+                            if (pqCertSz == 0 ||
+                                (args->idx - args->begin) + pqCertSz > totalSz)
+                                break;
+
+                            pqCertDer = input + args->idx;
+                            args->idx += pqCertSz;
+                            listSz -= pqCertSz;
+
+                            /* Consume PQ cert extension */
+                            pqExtSz = 0;
+                            if ((args->idx - args->begin) + OPAQUE16_LEN <= totalSz) {
+                                ato16(input + args->idx, &pqExtSz);
+                                args->idx += OPAQUE16_LEN;
+                                if ((args->idx - args->begin) + pqExtSz <= totalSz)
+                                    args->idx += pqExtSz;
+                                listSz -= OPAQUE16_LEN + pqExtSz;
+                            }
+
+                            if (!pqLeafDone) {
+                                /* Extract SPKI from PQ leaf cert for PQCertVerify */
+                                if (ssl->peerSapkiDer == NULL) {
+                                    word32 spkiSz = 0;
+                                    int r;
+                                    r = wc_GetSubjectPubKeyInfoDerFromCert(
+                                            pqCertDer, pqCertSz, NULL, &spkiSz);
+                                    if (r == 0 && spkiSz > 0) {
+                                        ssl->peerSapkiDer = (byte*)XMALLOC(
+                                            spkiSz, ssl->heap,
+                                            DYNAMIC_TYPE_PUBLIC_KEY);
+                                        if (ssl->peerSapkiDer != NULL) {
+                                            r = wc_GetSubjectPubKeyInfoDerFromCert(
+                                                    pqCertDer, pqCertSz,
+                                                    ssl->peerSapkiDer, &spkiSz);
+                                            if (r == 0) {
+                                                ssl->peerSapkiLen = (int)spkiSz;
+                                                printf("[TLS] DUAL: PQ leaf SPKI "
+                                                       "(%d B)\r\n",
+                                                       ssl->peerSapkiLen);
+                                            } else {
+                                                XFREE(ssl->peerSapkiDer,
+                                                      ssl->heap,
+                                                      DYNAMIC_TYPE_PUBLIC_KEY);
+                                                ssl->peerSapkiDer = NULL;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                /* Check for RelatedCertificate OID
+                                 * 1.3.6.1.5.5.7.1.36 =
+                                 * 06 08 2b 06 01 05 05 07 01 24 */
+                                {
+                                    static const byte kRelOid[] = {
+                                        0x06, 0x08,
+                                        0x2b, 0x06, 0x01, 0x05, 0x05,
+                                        0x07, 0x01, 0x24
+                                    };
+                                    word32 oi;
+                                    for (oi = 0;
+                                         oi + sizeof(kRelOid) <= pqCertSz;
+                                         oi++) {
+                                        if (XMEMCMP(pqCertDer + oi,
+                                                    kRelOid,
+                                                    sizeof(kRelOid)) == 0) {
+                                            ssl->peerHasRelatedCert = 1;
+                                            printf("[TLS] DUAL: PQ leaf has "
+                                                   "RelatedCertificate ext\r\n");
+
+                                            /* ── Hash binding verification ──
+                                             * RelatedCertificate ext value DER:
+                                             *   SEQUENCE {
+                                             *     AlgorithmIdentifier SEQUENCE,
+                                             *     OCTET STRING hash
+                                             *   }
+                                             * Located at: [BOOLEAN critical?] OCTET STRING { ... }
+                                             * immediately after the OID bytes. */
+                                            {
+                                                word32 p = oi + (word32)sizeof(kRelOid);
+
+                                                /* Skip optional BOOLEAN critical */
+                                                if (p < pqCertSz && pqCertDer[p] == 0x01)
+                                                    p += 3;
+
+                                                /* OCTET STRING wrapping the ext value */
+                                                if (p + 2 < pqCertSz && pqCertDer[p] == 0x04) {
+                                                    p++; /* skip 0x04 */
+                                                    if (pqCertDer[p] & 0x80) {
+                                                        int ll = pqCertDer[p] & 0x7F;
+                                                        p++;
+                                                        while (ll-- > 0 && p < pqCertSz) p++;
+                                                    } else {
+                                                        p++;
+                                                    }
+                                                    /* RelatedCertificate SEQUENCE */
+                                                    if (p + 2 < pqCertSz && pqCertDer[p] == 0x30) {
+                                                        p++;
+                                                        if (pqCertDer[p] & 0x80) {
+                                                            int ll = pqCertDer[p] & 0x7F;
+                                                            p++;
+                                                            while (ll-- > 0 && p < pqCertSz) p++;
+                                                        } else {
+                                                            p++;
+                                                        }
+                                                        /* AlgorithmIdentifier SEQUENCE — skip it */
+                                                        if (p + 2 < pqCertSz && pqCertDer[p] == 0x30) {
+                                                            word32 algLen;
+                                                            p++;
+                                                            if (pqCertDer[p] & 0x80) {
+                                                                int ll = pqCertDer[p] & 0x7F;
+                                                                p++;
+                                                                algLen = 0;
+                                                                while (ll-- > 0 && p < pqCertSz)
+                                                                    algLen = (algLen << 8) | pqCertDer[p++];
+                                                            } else {
+                                                                algLen = pqCertDer[p++];
+                                                            }
+                                                            p += algLen;
+                                                            /* OCTET STRING: hash value */
+                                                            if (p + 2 < pqCertSz && pqCertDer[p] == 0x04) {
+                                                                word32 hashLen;
+                                                                p++;
+                                                                if (pqCertDer[p] & 0x80) {
+                                                                    int ll = pqCertDer[p] & 0x7F;
+                                                                    p++;
+                                                                    hashLen = 0;
+                                                                    while (ll-- > 0 && p < pqCertSz)
+                                                                        hashLen = (hashLen << 8) | pqCertDer[p++];
+                                                                } else {
+                                                                    hashLen = pqCertDer[p++];
+                                                                }
+                                                                /* Primary ECDSA leaf cert */
+                                                                if ((hashLen == 32 || hashLen == 48 || hashLen == 64) &&
+                                                                    p + hashLen <= pqCertSz &&
+                                                                    args->totalCerts > 0 &&
+                                                                    args->certs[0].buffer != NULL)
+                                                                {
+                                                                    uint32_t _hash_bind_t0 = tls13_tick_ms();
+                                                                    const byte *ecDer = args->certs[0].buffer;
+                                                                    word32      ecSz  = args->certs[0].length;
+                                                                    const byte *extHash = pqCertDer + p;
+                                                                    byte computed[64];
+                                                                    int hashOk = 0;
+#ifndef NO_SHA256
+                                                                    if (hashLen == 32) {
+                                                                        wc_Sha256 sha;
+                                                                        wc_InitSha256(&sha);
+                                                                        wc_Sha256Update(&sha, ecDer, ecSz);
+                                                                        wc_Sha256Final(&sha, computed);
+                                                                        wc_Sha256Free(&sha);
+                                                                        hashOk = (XMEMCMP(computed, extHash, 32) == 0);
+                                                                    }
+#endif
+#ifdef WOLFSSL_SHA384
+                                                                    if (hashLen == 48) {
+                                                                        wc_Sha384 sha;
+                                                                        wc_InitSha384(&sha);
+                                                                        wc_Sha384Update(&sha, ecDer, ecSz);
+                                                                        wc_Sha384Final(&sha, computed);
+                                                                        wc_Sha384Free(&sha);
+                                                                        hashOk = (XMEMCMP(computed, extHash, 48) == 0);
+                                                                    }
+#endif
+#ifdef WOLFSSL_SHA512
+                                                                    if (hashLen == 64) {
+                                                                        wc_Sha512 sha;
+                                                                        wc_InitSha512(&sha);
+                                                                        wc_Sha512Update(&sha, ecDer, ecSz);
+                                                                        wc_Sha512Final(&sha, computed);
+                                                                        wc_Sha512Free(&sha);
+                                                                        hashOk = (XMEMCMP(computed, extHash, 64) == 0);
+                                                                    }
+#endif
+                                                                    ssl->peerRelatedHashOk = hashOk ? 1 : 0;
+                                                                    g_cert_t_hash_ms = tls13_tick_ms() - _hash_bind_t0;
+                                                                    printf("[TLS] DUAL: RelatedCert hash binding %s"
+                                                                           " (hashLen=%u)\r\n",
+                                                                           hashOk ? "OK" : "FAIL",
+                                                                           (unsigned)hashLen);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                /* Save leaf for post-loop verification
+                                 * (ICAs must be in CM first) */
+                                pqSavedLeafDer = pqCertDer;
+                                pqSavedLeafSz  = pqCertSz;
+                                pqLeafDone = 1;
+                            } else {
+                                /* Verify PQ ICA cert */
+                                DecodedCert pqDC;
+                                int vr;
+                                InitDecodedCert(&pqDC, pqCertDer, pqCertSz,
+                                                ssl->heap);
+                                vr = ParseCertRelative(&pqDC, CHAIN_CERT_TYPE,
+                                                       VERIFY, SSL_CM(ssl),
+                                                       NULL);
+                                (void)vr;
+                                FreeDecodedCert(&pqDC);
+                            }
+                        } /* while (listSz) — PQ chain certs */
+
+                        /* Verify PQ leaf cert now that all ICAs are in CM */
+                        if (pqSavedLeafDer != NULL) {
+                            uint32_t _leaf_t0 = tls13_tick_ms();
+                            DecodedCert pqDC;
+                            int vr;
+                            InitDecodedCert(&pqDC, pqSavedLeafDer,
+                                            pqSavedLeafSz, ssl->heap);
+                            vr = ParseCertRelative(&pqDC, CERT_TYPE,
+                                                   VERIFY, SSL_CM(ssl),
+                                                   NULL);
+                            g_cert_t_leaf_ms = tls13_tick_ms() - _leaf_t0;
+                            printf("[TLS] DUAL: PQ leaf verify %s "
+                                   "(err=%d)\r\n",
+                                   vr == 0 ? "OK" : "FAIL", vr);
+                            FreeDecodedCert(&pqDC);
+                        }
+                        g_cert_t_pq_ms = tls13_tick_ms() - _pq_t0;
+                    }
+                    break; /* done with the full certificate list */
+                }
+#endif /* WOLFSSL_HYBRID_CERT && WOLFSSL_TLS13 */
+
                 if ((args->idx - args->begin) + certSz > totalSz) {
                     ERROR_OUT(BUFFER_ERROR, exit_ppc);
                 }

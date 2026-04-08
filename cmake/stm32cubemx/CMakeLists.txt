@@ -46,6 +46,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/heap_regions.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/tls_client.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/wolfssl_hybrid.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/cert_bench.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4xx_hal_msp.c

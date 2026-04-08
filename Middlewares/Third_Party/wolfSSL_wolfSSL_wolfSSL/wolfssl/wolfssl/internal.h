@@ -6014,6 +6014,13 @@ struct WOLFSSL {
      * Used in DoTls13PQCertificateVerify to verify the ML-DSA alt signature. */
     byte*           peerSapkiDer;
     int             peerSapkiLen;
+    /* Set to 1 when the PQ chain leaf cert contains a RelatedCertificate
+     * extension (OID 1.3.6.1.5.5.7.1.36), detected during dual-chain parsing. */
+    byte            peerHasRelatedCert;
+    /* Set to 1 when the RelatedCertificate hash in the PQ leaf cert
+     * matches the computed hash of the primary (ECDSA) leaf cert.
+     * 0 if extension not found, hash mismatch, or parse error. */
+    byte            peerRelatedHashOk;
 #endif
 #if defined(HAVE_ECC) || defined(HAVE_ED25519) || \
     defined(HAVE_CURVE448) || defined(HAVE_ED448)
