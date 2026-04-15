@@ -4612,8 +4612,9 @@ void DecodeSigAlg(const byte* input, byte* hashAlgo, byte* hsType)
     /* Hash performed as part of sign/verify operation.
      * However, if we want a dual alg signature with a classic algorithm as
      * alternative, we need an explicit hash algo here. */
-    #ifdef HAVE_FALCON
-        case FALCON_SA_MAJOR:
+    #if defined(HAVE_FALCON) || defined(HAVE_SPHINCS)
+        case FALCON_SA_MAJOR:  /* = SPHINCS_SA_MAJOR = 0xFE */
+        #ifdef HAVE_FALCON
             if (input[1] == FALCON_LEVEL1_SA_MINOR) {
                 *hsType = falcon_level1_sa_algo;
                 *hashAlgo = sha256_mac;
@@ -4622,8 +4623,35 @@ void DecodeSigAlg(const byte* input, byte* hashAlgo, byte* hsType)
                 *hsType = falcon_level5_sa_algo;
                 *hashAlgo = sha512_mac;
             }
+        #endif /* HAVE_FALCON */
+        #ifdef HAVE_SPHINCS
+            else if (input[1] == SPHINCS_FAST_LEVEL1_SA_MINOR) {
+                *hsType = sphincs_fast_level1_sa_algo;
+                *hashAlgo = sha256_mac;
+            }
+            else if (input[1] == SPHINCS_FAST_LEVEL3_SA_MINOR) {
+                *hsType = sphincs_fast_level3_sa_algo;
+                *hashAlgo = sha256_mac;
+            }
+            else if (input[1] == SPHINCS_FAST_LEVEL5_SA_MINOR) {
+                *hsType = sphincs_fast_level5_sa_algo;
+                *hashAlgo = sha512_mac;
+            }
+            else if (input[1] == SPHINCS_SMALL_LEVEL1_SA_MINOR) {
+                *hsType = sphincs_small_level1_sa_algo;
+                *hashAlgo = sha256_mac;
+            }
+            else if (input[1] == SPHINCS_SMALL_LEVEL3_SA_MINOR) {
+                *hsType = sphincs_small_level3_sa_algo;
+                *hashAlgo = sha256_mac;
+            }
+            else if (input[1] == SPHINCS_SMALL_LEVEL5_SA_MINOR) {
+                *hsType = sphincs_small_level5_sa_algo;
+                *hashAlgo = sha512_mac;
+            }
+        #endif /* HAVE_SPHINCS */
             break;
-    #endif /* HAVE_FALCON */
+    #endif /* HAVE_FALCON || HAVE_SPHINCS */
     #ifdef HAVE_DILITHIUM
         case DILITHIUM_SA_MAJOR:
             if (input[1] == DILITHIUM_LEVEL2_SA_MINOR) {
@@ -8136,6 +8164,11 @@ void FreeKey(WOLFSSL* ssl, int type, void** pKey)
                 wc_falcon_free((falcon_key*)*pKey);
                 break;
         #endif /* HAVE_FALCON */
+        #if defined(HAVE_SPHINCS)
+            case DYNAMIC_TYPE_SPHINCS:
+                wc_sphincs_free((sphincs_key*)*pKey);
+                break;
+        #endif /* HAVE_SPHINCS */
         #if defined(HAVE_DILITHIUM)
             case DYNAMIC_TYPE_DILITHIUM:
                 wc_dilithium_free((dilithium_key*)*pKey);
@@ -8221,6 +8254,11 @@ int AllocKey(WOLFSSL* ssl, int type, void** pKey)
             sz = sizeof(falcon_key);
             break;
     #endif /* HAVE_FALCON */
+    #if defined(HAVE_SPHINCS)
+        case DYNAMIC_TYPE_SPHINCS:
+            sz = sizeof(sphincs_key);
+            break;
+    #endif /* HAVE_SPHINCS */
     #if defined(HAVE_DILITHIUM)
         case DYNAMIC_TYPE_DILITHIUM:
             sz = sizeof(dilithium_key);
@@ -8295,6 +8333,12 @@ int AllocKey(WOLFSSL* ssl, int type, void** pKey)
             ret = 0;
             break;
     #endif /* HAVE_FALCON */
+    #if defined(HAVE_SPHINCS)
+        case DYNAMIC_TYPE_SPHINCS:
+            wc_sphincs_init((sphincs_key*)*pKey);
+            ret = 0;
+            break;
+    #endif /* HAVE_SPHINCS */
     #if defined(HAVE_DILITHIUM)
         case DYNAMIC_TYPE_DILITHIUM:
             wc_dilithium_init_ex((dilithium_key*)*pKey, ssl->heap, ssl->devId);
@@ -8326,7 +8370,8 @@ int AllocKey(WOLFSSL* ssl, int type, void** pKey)
 
 #if !defined(NO_RSA) || defined(HAVE_ECC) || defined(HAVE_ED25519) || \
     defined(HAVE_CURVE25519) || defined(HAVE_ED448) || \
-    defined(HAVE_CURVE448) || defined(HAVE_FALCON) || defined(HAVE_DILITHIUM)
+    defined(HAVE_CURVE448) || defined(HAVE_FALCON) || defined(HAVE_SPHINCS) || \
+    defined(HAVE_DILITHIUM)
 static int ReuseKey(WOLFSSL* ssl, int type, void* pKey)
 {
     int ret = 0;
@@ -8378,6 +8423,12 @@ static int ReuseKey(WOLFSSL* ssl, int type, void* pKey)
             ret = wc_falcon_init((falcon_key*)pKey);
             break;
     #endif /* HAVE_FALCON */
+    #if defined(HAVE_SPHINCS)
+        case DYNAMIC_TYPE_SPHINCS:
+            wc_sphincs_free((sphincs_key*)pKey);
+            ret = wc_sphincs_init((sphincs_key*)pKey);
+            break;
+    #endif /* HAVE_SPHINCS */
     #if defined(HAVE_DILITHIUM)
         case DYNAMIC_TYPE_DILITHIUM:
             wc_dilithium_free((dilithium_key*)pKey);
@@ -8736,6 +8787,10 @@ void wolfSSL_ResourceFree(WOLFSSL* ssl)
     FreeKey(ssl, DYNAMIC_TYPE_FALCON, (void**)&ssl->peerFalconKey);
     ssl->peerFalconKeyPresent = 0;
 #endif
+#if defined(HAVE_SPHINCS)
+    FreeKey(ssl, DYNAMIC_TYPE_SPHINCS, (void**)&ssl->peerSphincsKey);
+    ssl->peerSphincsKeyPresent = 0;
+#endif
 #ifdef HAVE_PK_CALLBACKS
     #ifdef HAVE_ECC
         XFREE(ssl->buffers.peerEccDsaKey.buffer, ssl->heap, DYNAMIC_TYPE_ECC);
@@ -9004,6 +9059,10 @@ void FreeHandshakeResources(WOLFSSL* ssl)
         FreeKey(ssl, DYNAMIC_TYPE_FALCON, (void**)&ssl->peerFalconKey);
         ssl->peerFalconKeyPresent = 0;
 #endif /* HAVE_FALCON */
+#if defined(HAVE_SPHINCS)
+        FreeKey(ssl, DYNAMIC_TYPE_SPHINCS, (void**)&ssl->peerSphincsKey);
+        ssl->peerSphincsKeyPresent = 0;
+#endif /* HAVE_SPHINCS */
 #if defined(HAVE_DILITHIUM)
         FreeKey(ssl, DYNAMIC_TYPE_DILITHIUM, (void**)&ssl->peerDilithiumKey);
         ssl->peerDilithiumKeyPresent = 0;
@@ -17431,6 +17490,59 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                         break;
                     }
                 #endif /* HAVE_FALCON */
+                #if defined(HAVE_SPHINCS)
+                    case SPHINCS_FAST_LEVEL1k:
+                    case SPHINCS_FAST_LEVEL3k:
+                    case SPHINCS_FAST_LEVEL5k:
+                    case SPHINCS_SMALL_LEVEL1k:
+                    case SPHINCS_SMALL_LEVEL3k:
+                    case SPHINCS_SMALL_LEVEL5k:
+                    {
+                        int keyRet = 0;
+                        byte spLevel = 1, spOptim = FAST_VARIANT;
+                        if (ssl->peerSphincsKey == NULL) {
+                            /* alloc/init on demand */
+                            keyRet = AllocKey(ssl, DYNAMIC_TYPE_SPHINCS,
+                                    (void**)&ssl->peerSphincsKey);
+                        } else if (ssl->peerSphincsKeyPresent) {
+                            keyRet = ReuseKey(ssl, DYNAMIC_TYPE_SPHINCS,
+                                    ssl->peerSphincsKey);
+                            ssl->peerSphincsKeyPresent = 0;
+                        }
+
+                        if (keyRet == 0) {
+                            switch (args->dCert->keyOID) {
+                                case SPHINCS_FAST_LEVEL1k:
+                                    spLevel = 1; spOptim = FAST_VARIANT; break;
+                                case SPHINCS_FAST_LEVEL3k:
+                                    spLevel = 3; spOptim = FAST_VARIANT; break;
+                                case SPHINCS_FAST_LEVEL5k:
+                                    spLevel = 5; spOptim = FAST_VARIANT; break;
+                                case SPHINCS_SMALL_LEVEL1k:
+                                    spLevel = 1; spOptim = SMALL_VARIANT; break;
+                                case SPHINCS_SMALL_LEVEL3k:
+                                    spLevel = 3; spOptim = SMALL_VARIANT; break;
+                                case SPHINCS_SMALL_LEVEL5k:
+                                    spLevel = 5; spOptim = SMALL_VARIANT; break;
+                                default: break;
+                            }
+                            keyRet = wc_sphincs_set_level_and_optim(
+                                    ssl->peerSphincsKey, spLevel, spOptim);
+                        }
+
+                        if (keyRet != 0 ||
+                            wc_sphincs_import_public(args->dCert->publicKey,
+                                                     args->dCert->pubKeySize,
+                                                     ssl->peerSphincsKey) != 0) {
+                            ret = PEER_KEY_ERROR;
+                            WOLFSSL_ERROR_VERBOSE(ret);
+                        }
+                        else {
+                            ssl->peerSphincsKeyPresent = 1;
+                        }
+                        break;
+                    }
+                #endif /* HAVE_SPHINCS */
                 #if defined(HAVE_DILITHIUM) && \
                     !defined(WOLFSSL_DILITHIUM_NO_VERIFY)
                     case ML_DSA_LEVEL2k:

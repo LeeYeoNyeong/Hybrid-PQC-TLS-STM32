@@ -752,6 +752,22 @@
 #define HAVE_DILITHIUM
 #undef  WOLFSSL_WC_DILITHIUM
 #define WOLFSSL_WC_DILITHIUM
+
+/* Falcon – verify-only (no liboqs), Level 1 (512) + Level 5 (1024) */
+/* Note: HAVE_PQC must NOT be defined directly; wolfSSL settings.h sets it
+ * automatically when HAVE_FALCON (or HAVE_DILITHIUM etc.) is defined. */
+#undef  HAVE_FALCON
+#define HAVE_FALCON
+
+/* SPHINCS+ verify-only (SHAKE variants: fast/small × L1/L3/L5) */
+#undef  HAVE_SPHINCS
+#define HAVE_SPHINCS
+
+/* Extend handshake reassembly buffer for SPHINCS+ fast-L5 (~50KB sig) */
+#ifndef WOLFSSL_MAX_HANDSHAKE_SZ
+#define WOLFSSL_MAX_HANDSHAKE_SZ (65536)
+#endif
+
 /* WOLFSSL_DILITHIUM_NO_MAKE_KEY removed: cert_bench_task needs keygen */
 /* Use small-memory verification path: processes matrix A one column at a time
  * using ~12KB peak instead of 57KB (cache) or 82KB (single block).

@@ -14,13 +14,15 @@ extern "C" {
 
 /* ── Scenario definitions ── */
 typedef enum {
-    CERT_ECDSA      = 0,
-    CERT_MLDSA      = 1,
-    CERT_COMPOSITE  = 2,
-    CERT_CHAMELEON  = 3,
-    CERT_CATALYST   = 4,
-    CERT_RELATED    = 5,
-    CERT_DUAL       = 6,
+    CERT_ECDSA        = 0,
+    CERT_MLDSA        = 1,
+    CERT_COMPOSITE    = 2,
+    CERT_CHAMELEON    = 3,
+    CERT_CATALYST     = 4,
+    CERT_RELATED      = 5,
+    CERT_DUAL         = 6,
+    CERT_FALCON       = 7,   /* Falcon-512 (L1) / Falcon-1024 (L5) */
+    CERT_SPHINCS_FAST = 8,   /* SPHINCS+-SHAKE-fast (L1=128f) */
     CERT_TYPE_COUNT
 } CertType;
 

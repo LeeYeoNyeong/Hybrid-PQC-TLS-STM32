@@ -36,8 +36,10 @@
 #define WOLF_CRYPT_SPHINCS_H
 
 #include <wolfssl/wolfcrypt/types.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <stdbool.h>
 
-#if defined(HAVE_PQC) && defined(HAVE_SPHINCS)
+#if defined(HAVE_SPHINCS)
 
 #ifdef HAVE_LIBOQS
 #include <oqs/oqs.h>
@@ -70,6 +72,29 @@
 #define SPHINCS_LEVEL5_KEY_SIZE     OQS_SIG_sphincs_shake_256f_simple_length_secret_key
 #define SPHINCS_LEVEL5_PUB_KEY_SIZE OQS_SIG_sphincs_shake_256f_simple_length_public_key
 #define SPHINCS_LEVEL5_PRV_KEY_SIZE (SPHINCS_LEVEL5_PUB_KEY_SIZE+SPHINCS_LEVEL5_KEY_SIZE)
+#else
+/* Standalone (no liboqs) — NIST SPHINCS+ reference sizes              */
+/* SHAKE variants (wolfSSL sphincs.h only supports SHAKE)              */
+/* Signature sizes */
+#define SPHINCS_FAST_LEVEL1_SIG_SIZE     17088   /* SHAKE-128f */
+#define SPHINCS_FAST_LEVEL3_SIG_SIZE     35664   /* SHAKE-192f */
+#define SPHINCS_FAST_LEVEL5_SIG_SIZE     49856   /* SHAKE-256f */
+#define SPHINCS_SMALL_LEVEL1_SIG_SIZE    7856    /* SHAKE-128s */
+#define SPHINCS_SMALL_LEVEL3_SIG_SIZE    16224   /* SHAKE-192s */
+#define SPHINCS_SMALL_LEVEL5_SIG_SIZE    29792   /* SHAKE-256s */
+
+/* Key sizes (same for fast and small within a level) */
+#define SPHINCS_LEVEL1_KEY_SIZE     64   /* SHAKE-128 secret key */
+#define SPHINCS_LEVEL1_PUB_KEY_SIZE 32   /* SHAKE-128 public key */
+#define SPHINCS_LEVEL1_PRV_KEY_SIZE (SPHINCS_LEVEL1_PUB_KEY_SIZE + SPHINCS_LEVEL1_KEY_SIZE)
+
+#define SPHINCS_LEVEL3_KEY_SIZE     96   /* SHAKE-192 secret key */
+#define SPHINCS_LEVEL3_PUB_KEY_SIZE 48   /* SHAKE-192 public key */
+#define SPHINCS_LEVEL3_PRV_KEY_SIZE (SPHINCS_LEVEL3_PUB_KEY_SIZE + SPHINCS_LEVEL3_KEY_SIZE)
+
+#define SPHINCS_LEVEL5_KEY_SIZE     128  /* SHAKE-256 secret key */
+#define SPHINCS_LEVEL5_PUB_KEY_SIZE 64   /* SHAKE-256 public key */
+#define SPHINCS_LEVEL5_PRV_KEY_SIZE (SPHINCS_LEVEL5_PUB_KEY_SIZE + SPHINCS_LEVEL5_KEY_SIZE)
 #endif
 
 #define SPHINCS_MAX_SIG_SIZE     SPHINCS_FAST_LEVEL5_SIG_SIZE
@@ -163,5 +188,5 @@ WOLFSSL_API int wc_Sphincs_PublicKeyToDer(sphincs_key* key, byte* output,
     }    /* extern "C" */
 #endif
 
-#endif /* HAVE_PQC && HAVE_SPHINCS */
+#endif /* HAVE_SPHINCS */
 #endif /* WOLF_CRYPT_SPHINCS_H */

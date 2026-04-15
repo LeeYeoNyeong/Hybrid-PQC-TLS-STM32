@@ -1777,6 +1777,15 @@ enum Misc {
     FALCON_LEVEL5_SA_MAJOR = 0xFE,
     FALCON_LEVEL5_SA_MINOR = 0xB1,
 
+    /* SPHINCS+-SHAKE-simple OQS experimental codepoints (major=0xFE) */
+    SPHINCS_SA_MAJOR              = 0xFE,
+    SPHINCS_FAST_LEVEL1_SA_MINOR  = 0x6B,  /* 0xFE6B sphincsshake128fsimple */
+    SPHINCS_FAST_LEVEL3_SA_MINOR  = 0x6D,  /* 0xFE6D sphincsshake192fsimple */
+    SPHINCS_FAST_LEVEL5_SA_MINOR  = 0x6F,  /* 0xFE6F sphincsshake256fsimple */
+    SPHINCS_SMALL_LEVEL1_SA_MINOR = 0x6C,  /* 0xFE6C sphincsshake128ssimple */
+    SPHINCS_SMALL_LEVEL3_SA_MINOR = 0x6E,  /* 0xFE6E sphincsshake192ssimple */
+    SPHINCS_SMALL_LEVEL5_SA_MINOR = 0x70,  /* 0xFE70 sphincsshake256ssimple */
+
     /* these values for MLDSA (Dilithium) correspond to what is proposed in the
      * IETF. */
     DILITHIUM_LEVEL2_SA_MAJOR = 0x09,
@@ -4324,15 +4333,23 @@ enum SignatureAlgorithm {
     dilithium_level2_sa_algo     = 14,
     dilithium_level3_sa_algo     = 15,
     dilithium_level5_sa_algo     = 16,
+#ifdef HAVE_SPHINCS
+    sphincs_fast_level1_sa_algo  = 17,
+    sphincs_fast_level3_sa_algo  = 18,
+    sphincs_fast_level5_sa_algo  = 19,
+    sphincs_small_level1_sa_algo = 20,
+    sphincs_small_level3_sa_algo = 21,
+    sphincs_small_level5_sa_algo = 22,
+#endif
 #ifdef WOLFSSL_COMPOSITE_CERTS
-    composite_level1_sa_algo     = 17,
-    composite_level3_sa_algo     = 18,
-    composite_level5_sa_algo     = 19,
-    sm2_sa_algo                  = 20,
-    any_sa_algo                  = 21,
+    composite_level1_sa_algo     = 23,
+    composite_level3_sa_algo     = 24,
+    composite_level5_sa_algo     = 25,
+    sm2_sa_algo                  = 26,
+    any_sa_algo                  = 27,
 #else
-    sm2_sa_algo                  = 17,
-    any_sa_algo                  = 18,
+    sm2_sa_algo                  = 23,
+    any_sa_algo                  = 24,
 #endif
     invalid_sa_algo              = 255
 };
@@ -6045,6 +6062,10 @@ struct WOLFSSL {
 #ifdef HAVE_FALCON
     falcon_key*     peerFalconKey;
     byte            peerFalconKeyPresent;
+#endif
+#ifdef HAVE_SPHINCS
+    sphincs_key*    peerSphincsKey;
+    byte            peerSphincsKeyPresent;
 #endif
 #ifdef HAVE_DILITHIUM
     dilithium_key*  peerDilithiumKey;

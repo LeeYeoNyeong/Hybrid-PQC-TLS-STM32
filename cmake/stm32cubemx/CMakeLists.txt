@@ -206,6 +206,13 @@ set(wolfSSL_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/des3.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/dh.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/dilithium.c
+    # Falcon verify-only (NIST reference + wolfSSL bridge)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/falcon.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/falcon_ref/falcon_vrfy.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/falcon_ref/falcon_codec.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/falcon_ref/falcon_common.c
+    # SPHINCS+ verify-only (standalone wolfSSL bridge)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/sphincs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/dsa.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/ecc_fp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/wolfSSL_wolfSSL_wolfSSL/wolfssl/wolfcrypt/src/ecc.c

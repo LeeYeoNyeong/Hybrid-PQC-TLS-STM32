@@ -30,12 +30,14 @@
 #define WOLF_CRYPT_FALCON_H
 
 #include <wolfssl/wolfcrypt/types.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <stdbool.h>
 
 #ifdef WOLF_CRYPTO_CB
     #include <wolfssl/wolfcrypt/cryptocb.h>
 #endif
 
-#if defined(HAVE_PQC) && defined(HAVE_FALCON)
+#if defined(HAVE_FALCON)
 
 #ifdef HAVE_LIBOQS
 #include <oqs/oqs.h>
@@ -58,6 +60,17 @@
 #define FALCON_LEVEL5_SIG_SIZE     OQS_SIG_falcon_1024_length_signature
 #define FALCON_LEVEL5_PUB_KEY_SIZE OQS_SIG_falcon_1024_length_public_key
 #define FALCON_LEVEL5_PRV_KEY_SIZE (FALCON_LEVEL5_PUB_KEY_SIZE+FALCON_LEVEL5_KEY_SIZE)
+#else
+/* Standalone (no liboqs) — NIST Falcon reference sizes */
+#define FALCON_LEVEL1_PUB_KEY_SIZE  897     /* 1 header + 512*14/8 */
+#define FALCON_LEVEL1_KEY_SIZE      1281    /* Falcon-512 secret key */
+#define FALCON_LEVEL1_SIG_SIZE      690     /* max compressed sig (OQS upper bound) */
+#define FALCON_LEVEL1_PRV_KEY_SIZE  (FALCON_LEVEL1_PUB_KEY_SIZE + FALCON_LEVEL1_KEY_SIZE)
+
+#define FALCON_LEVEL5_PUB_KEY_SIZE  1793    /* 1 header + 1024*14/8 */
+#define FALCON_LEVEL5_KEY_SIZE      2305    /* Falcon-1024 secret key */
+#define FALCON_LEVEL5_SIG_SIZE      1330    /* max compressed sig (OQS upper bound) */
+#define FALCON_LEVEL5_PRV_KEY_SIZE  (FALCON_LEVEL5_PUB_KEY_SIZE + FALCON_LEVEL5_KEY_SIZE)
 #endif
 
 #define FALCON_MAX_KEY_SIZE     FALCON_LEVEL5_KEY_SIZE
@@ -176,5 +189,5 @@ WOLFSSL_API int wc_Falcon_PublicKeyToDer(falcon_key* key, byte* output,
     }    /* extern "C" */
 #endif
 
-#endif /* HAVE_PQC && HAVE_FALCON */
+#endif /* HAVE_FALCON */
 #endif /* WOLF_CRYPT_FALCON_H */
