@@ -3381,6 +3381,13 @@ void InitSuitesHashSigAlgo(byte* hashSigAlgo, int haveSig, int tls1_2,
             &idx);
     }
 #endif /* HAVE_FALCON */
+#ifdef HAVE_SPHINCS
+    /* Unconditionally advertise SPHINCS+ sigalgs when compiled in — Stage 4
+     * standalone verify-only build lacks a SIG_SPHINCS bitmask, so we bypass
+     * the haveSig gate. */
+    AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_fast_level1_sa_algo, keySz,
+        &idx);
+#endif /* HAVE_SPHINCS */
 #ifdef HAVE_DILITHIUM
     if (haveSig & SIG_DILITHIUM) {
         AddSuiteHashSigAlgo(hashSigAlgo, no_mac, dilithium_level2_sa_algo,

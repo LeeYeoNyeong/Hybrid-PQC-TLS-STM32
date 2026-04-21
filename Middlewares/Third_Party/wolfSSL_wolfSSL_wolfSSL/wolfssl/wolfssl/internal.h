@@ -1771,15 +1771,17 @@ enum Misc {
     FALCON_SA_MAJOR     = 0xFE,/* Most significant byte used with falcon sig algs */
     DILITHIUM_SA_MAJOR  = 0x09,/* Most significant byte used with dilithium sig algs */
 
-    /* These values for falcon match what OQS has defined. */
+    /* Codepoints aligned with oqs-provider 0.12 current defaults
+     * (ALGORITHMS.md: falcon512=0xFED7, falcon1024=0xFEDA,
+     *  sphincsshake128fsimple=0xFEC2). */
     FALCON_LEVEL1_SA_MAJOR = 0xFE,
-    FALCON_LEVEL1_SA_MINOR = 0xAE,
+    FALCON_LEVEL1_SA_MINOR = 0xD7,
     FALCON_LEVEL5_SA_MAJOR = 0xFE,
-    FALCON_LEVEL5_SA_MINOR = 0xB1,
+    FALCON_LEVEL5_SA_MINOR = 0xDA,
 
-    /* SPHINCS+-SHAKE-simple OQS experimental codepoints (major=0xFE) */
+    /* SPHINCS+-SHAKE-simple OQS codepoints (major=0xFE) */
     SPHINCS_SA_MAJOR              = 0xFE,
-    SPHINCS_FAST_LEVEL1_SA_MINOR  = 0x6B,  /* 0xFE6B sphincsshake128fsimple */
+    SPHINCS_FAST_LEVEL1_SA_MINOR  = 0xC2,  /* 0xFEC2 sphincsshake128fsimple */
     SPHINCS_FAST_LEVEL3_SA_MINOR  = 0x6D,  /* 0xFE6D sphincsshake192fsimple */
     SPHINCS_FAST_LEVEL5_SA_MINOR  = 0x6F,  /* 0xFE6F sphincsshake256fsimple */
     SPHINCS_SMALL_LEVEL1_SA_MINOR = 0x6C,  /* 0xFE6C sphincsshake128ssimple */

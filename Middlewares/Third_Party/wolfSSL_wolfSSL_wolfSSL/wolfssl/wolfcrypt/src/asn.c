@@ -4350,11 +4350,11 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte sigEd448Oid[] = {43, 101, 113};
 #endif /* HAVE_ED448 */
 #ifdef HAVE_FALCON
-    /* Falcon Level 1: 1 3 9999 3 6 */
-    static const byte sigFalcon_Level1Oid[] = {43, 206, 15, 3, 6};
+    /* Falcon Level 1: 1 3 9999 3 11 (oqs-provider current) */
+    static const byte sigFalcon_Level1Oid[] = {43, 206, 15, 3, 11};
 
-    /* Falcon Level 5: 1 3 9999 3 9 */
-    static const byte sigFalcon_Level5Oid[] = {43, 206, 15, 3, 9};
+    /* Falcon Level 5: 1 3 9999 3 14 (oqs-provider current) */
+    static const byte sigFalcon_Level5Oid[] = {43, 206, 15, 3, 14};
 #endif /* HAVE_FACON */
 #ifdef HAVE_DILITHIUM
 #ifdef WOLFSSL_DILITHIUM_FIPS204_DRAFT
@@ -4392,9 +4392,9 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte sigComposite_L5_Oid[] = {43, 206, 15, 7, 8};
 #endif /* WOLFSSL_COMPOSITE_CERTS */
 #ifdef HAVE_SPHINCS
-    /* Sphincs Fast Level 1: 1 3 9999 6 7 4 */
+    /* Sphincs Fast Level 1: 1 3 9999 6 7 13 (oqs-provider current) */
     static const byte sigSphincsFast_Level1Oid[] =
-        {43, 206, 15, 6, 7, 4};
+        {43, 206, 15, 6, 7, 13};
 
     /* Sphincs Fast Level 3: 1 3 9999 6 8 3 */
     static const byte sigSphincsFast_Level3Oid[] =
@@ -4446,11 +4446,11 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte keyDhOid[] = {42, 134, 72, 134, 247, 13, 1, 3, 1};
 #endif /* !NO_DH */
 #ifdef HAVE_FALCON
-    /* Falcon Level 1: 1 3 9999 3 6 */
-    static const byte keyFalcon_Level1Oid[] = {43, 206, 15, 3, 6};
+    /* Falcon Level 1: 1 3 9999 3 11 (oqs-provider current) */
+    static const byte keyFalcon_Level1Oid[] = {43, 206, 15, 3, 11};
 
-    /* Falcon Level 5: 1 3 9999 3 9 */
-    static const byte keyFalcon_Level5Oid[] = {43, 206, 15, 3, 9};
+    /* Falcon Level 5: 1 3 9999 3 14 (oqs-provider current) */
+    static const byte keyFalcon_Level5Oid[] = {43, 206, 15, 3, 14};
 #endif /* HAVE_FALCON */
 #ifdef HAVE_DILITHIUM
 #ifdef WOLFSSL_DILITHIUM_FIPS204_DRAFT
@@ -4490,7 +4490,7 @@ static word32 SetBitString16Bit(word16 val, byte* output)
 #ifdef HAVE_SPHINCS
     /* Sphincs Fast Level 1: 1 3 9999 6 7 4 */
     static const byte keySphincsFast_Level1Oid[] =
-        {43, 206, 15, 6, 7, 4};
+        {43, 206, 15, 6, 7, 13};
 
     /* Sphincs Fast Level 3: 1 3 9999 6 8 3 */
     static const byte keySphincsFast_Level3Oid[] =
