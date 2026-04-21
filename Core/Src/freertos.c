@@ -59,9 +59,10 @@ void vApplicationMallocFailedHook(void);
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 {
-   /* Run time stack overflow checking is performed if
-   configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
-   called if a stack overflow is detected. */
+   extern int printf(const char *, ...);
+   (void)xTask;
+   printf("\n[PANIC] Stack overflow in task '%s'\n",
+          pcTaskName ? (const char *)pcTaskName : "?");
 }
 /* USER CODE END 4 */
 

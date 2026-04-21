@@ -78,7 +78,7 @@ const osThreadAttr_t wolfCrypt_attributes = {
 osThreadId_t tlsPerfHandle;
 const osThreadAttr_t tlsPerf_attributes = {
   .name = "tlsPerf",
-  .stack_size = 4096 * 4,
+  .stack_size = 8192 * 4,  /* 32 KB — extra for Falcon/SPHINCS+ verify stack */
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* Definitions for certBench — shares same stack budget as tlsPerf */

@@ -86,7 +86,18 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  extern int printf(const char *, ...);
+  volatile uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;  /* Configurable Fault Status */
+  volatile uint32_t hfsr = *(volatile uint32_t *)0xE000ED2C;  /* HardFault Status */
+  volatile uint32_t mmfar = *(volatile uint32_t *)0xE000ED34; /* MemManage Fault Address */
+  volatile uint32_t bfar  = *(volatile uint32_t *)0xE000ED38; /* BusFault Address */
+  uint32_t pc = 0, lr = 0;
+  __asm volatile ("mov %0, pc" : "=r"(pc));
+  __asm volatile ("mov %0, lr" : "=r"(lr));
+  printf("\n[PANIC] HardFault CFSR=0x%08lX HFSR=0x%08lX MMFAR=0x%08lX BFAR=0x%08lX PC=0x%08lX LR=0x%08lX\n",
+         (unsigned long)cfsr, (unsigned long)hfsr,
+         (unsigned long)mmfar, (unsigned long)bfar,
+         (unsigned long)pc, (unsigned long)lr);
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -101,7 +112,11 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+  extern int printf(const char *, ...);
+  volatile uint32_t cfsr  = *(volatile uint32_t *)0xE000ED28;
+  volatile uint32_t mmfar = *(volatile uint32_t *)0xE000ED34;
+  printf("\n[PANIC] MemManage CFSR=0x%08lX MMFAR=0x%08lX\n",
+         (unsigned long)cfsr, (unsigned long)mmfar);
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -116,7 +131,11 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+  extern int printf(const char *, ...);
+  volatile uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;
+  volatile uint32_t bfar = *(volatile uint32_t *)0xE000ED38;
+  printf("\n[PANIC] BusFault CFSR=0x%08lX BFAR=0x%08lX\n",
+         (unsigned long)cfsr, (unsigned long)bfar);
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -131,7 +150,10 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+  extern int printf(const char *, ...);
+  volatile uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;
+  printf("\n[PANIC] UsageFault CFSR=0x%08lX (UFSR=0x%04lX)\n",
+         (unsigned long)cfsr, (unsigned long)(cfsr >> 16));
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
