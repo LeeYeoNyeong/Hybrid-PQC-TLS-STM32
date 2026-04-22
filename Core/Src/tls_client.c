@@ -2483,19 +2483,17 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return 0;
 
-    /* Blocking connect — fast on LAN, avoids EINPROGRESS complexity. */
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         printf("[TLS] TCP connect failed errno=%d\n", errno);
         close(fd); return 0;
     }
+    printf("[TLS] TCP OK, starting TLS (t=%lu)\n", (unsigned long)HAL_GetTick());
 
-    /* Switch to non-blocking AFTER connect so wolfSSL_connect() can be
-     * given a hard wall-clock deadline (WANT_READ loop with HAL_GetTick). */
-    u32_t nb = 1;
-    if (ioctlsocket(fd, FIONBIO, &nb) != 0) {
-        printf("[TLS] FIONBIO failed errno=%d\n", errno);
-        close(fd); return 0;
-    }
+    /* SO_RCVTIMEO: 20-second hard cap on blocking recv inside wolfSSL_connect.
+     * LWIP_SO_RCVTIMEO=1 in lwipopts.h makes this effective.
+     * SPX_YIELD() in sphincs.c also lets tcpip_thread run during 3.2s verify. */
+    struct timeval tv = {.tv_sec = 20, .tv_usec = 0};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     WOLFSSL *ssl = wolfSSL_new(ctx);
     if (!ssl) { close(fd); return 0; }
@@ -2512,19 +2510,7 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
 
     ++hs_count;
     uint32_t t_start = HAL_GetTick();
-    int ret;
-    do {
-        ret = wolfSSL_connect(ssl);
-        if (ret == WOLFSSL_SUCCESS) break;
-        int err = wolfSSL_get_error(ssl, ret);
-        if (err != WOLFSSL_ERROR_WANT_READ && err != WOLFSSL_ERROR_WANT_WRITE) break;
-        /* Overflow-safe 15-second deadline: subtract avoids wrap-around issues */
-        if ((int32_t)(HAL_GetTick() - t_start) > 15000) break;
-        fd_set rfds; struct timeval stv = {0, 10000};   /* 10ms select slice */
-        FD_ZERO(&rfds); FD_SET((unsigned)fd, &rfds);
-        if (select(fd + 1, &rfds, NULL, NULL, &stv) < 0) break;
-        osDelay(1);  /* 1 tick yield so LwIP can drain ETH DMA RX */
-    } while (1);
+    int ret = wolfSSL_connect(ssl);
     uint32_t t_end = HAL_GetTick();
 
     uint32_t elapsed = 0;
