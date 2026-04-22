@@ -36,9 +36,13 @@
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
 /* Require this many consecutive bad PHY reads before declaring link-down.
- * Prevents false link-down during SPHINCS+ verify (~3.2s), which causes
- * STM32F439 supply sag and makes MDIO reads return HAL_TIMEOUT momentarily. */
-#define PHY_DOWN_HYSTERESIS 3
+ * SPHINCS+ verify takes ~3.2s and causes STM32F439 supply sag → MDIO HAL_TIMEOUT.
+ * 3 polls (300ms) was insufficient — confirmed link-down during 3.2s verify.
+ * 50 polls × 100ms = 5.0s covers SPHINCS+ verify with ~1.8s margin. */
+#define PHY_DOWN_HYSTERESIS 50
+/* Force link-down after this many consecutive MDIO read failures, to avoid
+ * masking a real disconnect when phy_down_count never increments. */
+#define PHY_ERR_HYSTERESIS  100
 /* USER CODE END 0 */
 
 /* Private define ------------------------------------------------------------*/
@@ -540,8 +544,9 @@ void ethernet_link_thread(void* argument)
   uint32_t phyBSRValue = 0;
 
 /* USER CODE BEGIN ETH link init */
-  /* Task runs exactly once — static counter is safe without explicit reset. */
+  /* Task runs exactly once — static counters are safe without explicit reset. */
   static int phy_down_count = 0;
+  static int phy_err_count  = 0;
 /* USER CODE END ETH link init */
 
   for(;;)
@@ -550,9 +555,18 @@ void ethernet_link_thread(void* argument)
     HAL_StatusTypeDef phy_status = HAL_ETH_ReadPHYRegister(&heth, _PHY_ADDRESS, PHY_BSR, &phyBSRValue);
 
     if (phy_status != HAL_OK) {
-      /* MDIO read failed (bus error / supply sag timeout) — do not change link state
-       * or advance the down counter; the PHY may recover on the next poll. */
+      /* MDIO read failed (bus error / supply sag timeout) — do not change link
+       * state or advance down counter; PHY may recover on next poll.
+       * Safety cap: if MDIO keeps failing beyond PHY_ERR_HYSTERESIS polls,
+       * force link-down to avoid masking a real disconnect. */
+      if (++phy_err_count >= PHY_ERR_HYSTERESIS && netif_is_link_up(netif)) {
+        phy_err_count  = 0;
+        phy_down_count = 0;
+        printf("[ETH] Link DOWN forced after %d MDIO errors\n", PHY_ERR_HYSTERESIS);
+        netif_set_link_down(netif);
+      }
     } else {
+      phy_err_count = 0;
       phyLinkStatus = (phyBSRValue & PHY_LINKED_STATUS);
 
       if (phyLinkStatus && !netif_is_link_up(netif)) {
