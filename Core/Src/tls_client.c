@@ -2240,9 +2240,8 @@ typedef struct {
  * that already have good data, then rebuild & reflash to re-run only the
  * remaining scenarios. Must be NULL-terminated. */
 static const char *const g_skip_scenarios[] = {
-    /* 2026-04-21: these 21 scenarios already captured in Round 4.
-     * Only FALCON_L1, FALCON_L5, SPHINCS_FAST_L1 need re-measurement
-     * after OQS codepoint alignment to wolfSSL. */
+    /* 2026-04-22: measuring SPHINCS+ alone to avoid heap fragmentation
+     * from prior scenarios (SPHINCS+ verify is heap-heavy). */
     "ECDSA_L1", "ECDSA_L3", "ECDSA_L5",
     "MLDSA_L1", "MLDSA_L3", "MLDSA_L5",
     "RELATED_L1", "RELATED_L3", "RELATED_L5",
@@ -2250,6 +2249,7 @@ static const char *const g_skip_scenarios[] = {
     "CHAMELEON_L1", "CHAMELEON_L3", "CHAMELEON_L5",
     "DUAL_L1", "DUAL_L3", "DUAL_L5",
     "COMPOSITE_L1", "COMPOSITE_L3", "COMPOSITE_L5",
+    "FALCON_L1", "FALCON_L5",
     NULL
 };
 
@@ -2354,17 +2354,16 @@ static int configure_scenario_ctx(WOLFSSL_CTX *ctx, const Scenario *sc)
      * server-cert signature is still verified in CertVerify, which is what
      * we're benchmarking. */
     if (sc->type == CERT_FALCON || sc->type == CERT_SPHINCS_FAST) {
+        /* PQ CAs are self-signed OQS roots that wolfSSL can't verify; skip
+         * trust anchor loading and disable peer verify. The PQ signature in
+         * CertificateVerify is still validated in the handshake path, which
+         * is what we're benchmarking. sig_names[] doesn't include Falcon or
+         * SPHINCS+ entries, so we must NOT call set1_sigalgs_list (it would
+         * fail parsing and blank the suite's hashSigAlgoSz, causing the
+         * ClientHello signature_algorithms extension to be omitted and the
+         * server to reply with decode_error). The default hashSigAlgo list
+         * built by AddSuiteHashSigAlgo already includes the PQ sigalg. */
         wolfSSL_CTX_set_verify(ctx, WOLFSSL_VERIFY_NONE, NULL);
-        /* Explicitly advertise the PQ sigalg so server accepts ClientHello.
-         * Falcon is auto-advertised via AddSuiteHashSigAlgo, but this Stage 4
-         * tree's SPHINCS+ path lacks a SIG_SPHINCS bitmask, so force it. */
-        if (sc->type == CERT_SPHINCS_FAST) {
-            wolfSSL_CTX_set1_sigalgs_list(ctx, "sphincs_fast_level1");
-        } else if (sc->type == CERT_FALCON && sc->level == SEC_LEVEL_1) {
-            wolfSSL_CTX_set1_sigalgs_list(ctx, "falcon_level1");
-        } else if (sc->type == CERT_FALCON && sc->level == SEC_LEVEL_5) {
-            wolfSSL_CTX_set1_sigalgs_list(ctx, "falcon_level5");
-        }
         return WOLFSSL_SUCCESS;
     }
 

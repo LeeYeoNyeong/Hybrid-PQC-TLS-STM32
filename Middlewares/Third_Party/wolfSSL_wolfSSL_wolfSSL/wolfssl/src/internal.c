@@ -3279,6 +3279,13 @@ static WC_INLINE void AddSuiteHashSigAlgo(byte* hashSigAlgo, byte macAlgo,
         }
         else
     #endif /* HAVE_FALCON */
+    #ifdef HAVE_SPHINCS
+        if (sigAlgo == sphincs_fast_level1_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                SPHINCS_SA_MAJOR, SPHINCS_FAST_LEVEL1_SA_MINOR);
+        }
+        else
+    #endif /* HAVE_SPHINCS */
     #ifdef HAVE_DILITHIUM
         if (sigAlgo == dilithium_level2_sa_algo) {
             ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
