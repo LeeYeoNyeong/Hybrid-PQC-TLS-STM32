@@ -10325,10 +10325,6 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
                 ERROR_OUT(BUFFER_ERROR, exit_dcv);
             }
 
-            /* [COMPOSITE-DBG] Print received CertificateVerify sigalg bytes */
-            printf("[DBG] CertVerify sigalg: 0x%02X 0x%02X\r\n",
-                   input[args->idx + 0], input[args->idx + 1]);
-
             validSigAlgo = 0;
             for (i = 0; i < suites->hashSigAlgoSz; i += 2) {
                  if ((suites->hashSigAlgo[i + 0] == input[args->idx + 0]) &&
@@ -10338,8 +10334,6 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
                  }
             }
             if (!validSigAlgo) {
-                printf("[DBG] CertVerify INVALID sigalg 0x%02X%02X (not in suites)\r\n",
-                       input[args->idx + 0], input[args->idx + 1]);
                 ERROR_OUT(INVALID_PARAMETER, exit_dcv);
             }
 
@@ -10383,9 +10377,25 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
             args->idx += OPAQUE16_LEN;
 
             /* Signature data. */
-            if ((args->idx - args->begin) + args->sz > totalSz ||
-                                                       args->sz > ENCRYPT_LEN) {
-                ERROR_OUT(BUFFER_ERROR, exit_dcv);
+            {
+                word32 maxSigSz = ENCRYPT_LEN;
+            #ifdef HAVE_SPHINCS
+                /* SPHINCS+ sigs (fast-L1: 17088 B, fast-L5: 49856 B) far exceed
+                 * ENCRYPT_LEN (5120 B) which sizes record-encryption buffers,
+                 * not PQ signatures. Bound by the handshake buffer instead. */
+                if (ssl->options.peerSigAlgo == sphincs_fast_level1_sa_algo ||
+                    ssl->options.peerSigAlgo == sphincs_fast_level3_sa_algo ||
+                    ssl->options.peerSigAlgo == sphincs_fast_level5_sa_algo ||
+                    ssl->options.peerSigAlgo == sphincs_small_level1_sa_algo ||
+                    ssl->options.peerSigAlgo == sphincs_small_level3_sa_algo ||
+                    ssl->options.peerSigAlgo == sphincs_small_level5_sa_algo) {
+                    maxSigSz = WOLFSSL_MAX_HANDSHAKE_SZ;
+                }
+            #endif
+                if ((args->idx - args->begin) + args->sz > totalSz ||
+                    args->sz > maxSigSz) {
+                    ERROR_OUT(BUFFER_ERROR, exit_dcv);
+                }
             }
 
 #ifdef WOLFSSL_DUAL_ALG_CERTS
