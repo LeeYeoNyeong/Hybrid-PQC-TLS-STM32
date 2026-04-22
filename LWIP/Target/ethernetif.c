@@ -35,7 +35,10 @@
 
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
-
+/* Require this many consecutive bad PHY reads before declaring link-down.
+ * Prevents false link-down during SPHINCS+ verify (~3.2s), which causes
+ * STM32F439 supply sag and makes MDIO reads return HAL_TIMEOUT momentarily. */
+#define PHY_DOWN_HYSTERESIS 3
 /* USER CODE END 0 */
 
 /* Private define ------------------------------------------------------------*/
@@ -537,20 +540,33 @@ void ethernet_link_thread(void* argument)
   uint32_t phyBSRValue = 0;
 
 /* USER CODE BEGIN ETH link init */
-
+  /* Task runs exactly once — static counter is safe without explicit reset. */
+  static int phy_down_count = 0;
 /* USER CODE END ETH link init */
 
   for(;;)
   {
 /* USER CODE BEGIN ETH link Thread core code for User BSP */
     HAL_StatusTypeDef phy_status = HAL_ETH_ReadPHYRegister(&heth, _PHY_ADDRESS, PHY_BSR, &phyBSRValue);
-    phyLinkStatus = (phyBSRValue & PHY_LINKED_STATUS);
 
-    if (phy_status == HAL_OK && phyLinkStatus && !netif_is_link_up(netif)) {
-      netif_set_link_up(netif);
-    } else if (!phyLinkStatus && netif_is_link_up(netif)) {
-      printf("[ETH] Link DOWN detected\n");
-      netif_set_link_down(netif);
+    if (phy_status != HAL_OK) {
+      /* MDIO read failed (bus error / supply sag timeout) — do not change link state
+       * or advance the down counter; the PHY may recover on the next poll. */
+    } else {
+      phyLinkStatus = (phyBSRValue & PHY_LINKED_STATUS);
+
+      if (phyLinkStatus && !netif_is_link_up(netif)) {
+        phy_down_count = 0;
+        netif_set_link_up(netif);
+      } else if (!phyLinkStatus && netif_is_link_up(netif)) {
+        if (++phy_down_count >= PHY_DOWN_HYSTERESIS) {
+          phy_down_count = 0;
+          printf("[ETH] Link DOWN confirmed after %d polls\n", PHY_DOWN_HYSTERESIS);
+          netif_set_link_down(netif);
+        }
+      } else {
+        phy_down_count = 0;
+      }
     }
 /* USER CODE END ETH link Thread core code for User BSP */
 
