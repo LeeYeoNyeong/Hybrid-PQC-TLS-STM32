@@ -30,6 +30,18 @@
 #include <wolfssl/wolfcrypt/types.h>
 #include <string.h>
 
+/* Yield to FreeRTOS scheduler inside long SPHINCS+ verify loops so that
+ * the LwIP tcpip_thread (same priority) can process incoming TCP packets.
+ * Without this, the 3.2-second verify monopolises the CPU and the server's
+ * CertificateVerify/Finished frames are lost from the DMA RX buffer. */
+#ifdef FREERTOS
+    #include "FreeRTOS.h"
+    #include "task.h"
+    #define SPX_YIELD() taskYIELD()
+#else
+    #define SPX_YIELD() do {} while (0)
+#endif
+
 #ifdef NO_INLINE
     #include <wolfssl/wolfcrypt/misc.h>
 #else
@@ -417,6 +429,7 @@ static int spx_fors_pk_from_sig(byte *pk, const byte *sig,
         ret = spx_compute_root(roots + i * n, leaf, indices[i], idx_offset,
                                sig, p->fors_h, pk_seed, n, fors_tree_addr);
         sig += n * p->fors_h;
+        SPX_YIELD();  /* allow LwIP to drain ETH DMA RX between FORS trees */
     }
 
     if (ret == 0) {
@@ -524,6 +537,7 @@ static int spx_shake_verify(const byte *sig, word32 sigLen,
         /* Next layer: leaf is current tree's index in parent tree */
         idx_leaf = (word32)(tree & (word32)((1 << tree_height) - 1));
         tree   >>= (word64)tree_height;
+        SPX_YIELD();  /* allow LwIP to process TCP packets between HT layers */
     }
 
     if (ret == 0) {

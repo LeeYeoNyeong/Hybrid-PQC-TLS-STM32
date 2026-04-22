@@ -17030,7 +17030,8 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                      * public key is loaded separately from args->dCert below. */
                     if (copyRet == WC_NO_ERR_TRACE(MEMORY_E)) {
                         WOLFSSL_MSG("CopyDecodedToX509 MEMORY_E - continuing handshake");
-                        (void)copyRet;
+                        FreeX509(&ssl->peerCert);
+                        InitX509(&ssl->peerCert, 0, ssl->heap);
                     }
                 }
             #endif /* KEEP_PEER_CERT */

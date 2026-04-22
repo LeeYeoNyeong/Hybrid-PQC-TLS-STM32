@@ -10382,7 +10382,8 @@ static int DoTls13CertificateVerify(WOLFSSL* ssl, byte* input,
             #ifdef HAVE_SPHINCS
                 /* SPHINCS+ sigs (fast-L1: 17088 B, fast-L5: 49856 B) far exceed
                  * ENCRYPT_LEN (5120 B) which sizes record-encryption buffers,
-                 * not PQ signatures. Bound by the handshake buffer instead. */
+                 * not PQ signatures. Bound by the handshake buffer instead.
+                 * All 6 variants guarded: future L3/L5 scenarios share this path. */
                 if (ssl->options.peerSigAlgo == sphincs_fast_level1_sa_algo ||
                     ssl->options.peerSigAlgo == sphincs_fast_level3_sa_algo ||
                     ssl->options.peerSigAlgo == sphincs_fast_level5_sa_algo ||

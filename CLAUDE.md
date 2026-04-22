@@ -2,6 +2,15 @@
 
 이 파일은 Claude Code(claude.ai/code)가 이 저장소에서 작업할 때 참고할 가이드입니다.
 
+## 멀티에이전트 작업 (cmux native)
+
+- 기동: `cmux claude-teams --model sonnet` (또는 cmux command palette `⌘K` → `Claude Teammate Mode`)
+- 워커는 현재 cmux 워크스페이스 내 native split으로 자동 등장 (tmux/omc-watch 불필요)
+- 필수 env: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (`~/.zshrc` 에 이미 설정)
+- 빌드/플래시/UART 캡처는 `cmux.json` 팔레트 항목 사용 (`Build → Flash → UART Capture` 원클릭)
+- CRITICAL 리뷰 finding 발견 시 즉시 중단 후 사용자 보고
+- **병렬 워커 spawn 시 항상 cmux 화면을 스플릿해서 보여줄 것** — 사용자가 별도 요청하지 않아도 기본 동작
+
 ## 빌드 및 플래시
 
 ```bash

@@ -2483,9 +2483,18 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return 0;
 
+    /* Blocking connect — fast on LAN, avoids EINPROGRESS complexity. */
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        close(fd);
-        return 0;
+        printf("[TLS] TCP connect failed errno=%d\n", errno);
+        close(fd); return 0;
+    }
+
+    /* Switch to non-blocking AFTER connect so wolfSSL_connect() can be
+     * given a hard wall-clock deadline (WANT_READ loop with HAL_GetTick). */
+    u32_t nb = 1;
+    if (ioctlsocket(fd, FIONBIO, &nb) != 0) {
+        printf("[TLS] FIONBIO failed errno=%d\n", errno);
+        close(fd); return 0;
     }
 
     WOLFSSL *ssl = wolfSSL_new(ctx);
@@ -2503,8 +2512,20 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
 
     ++hs_count;
     uint32_t t_start = HAL_GetTick();
-    int ret = wolfSSL_connect(ssl);
-    uint32_t t_end   = HAL_GetTick();
+    int ret;
+    do {
+        ret = wolfSSL_connect(ssl);
+        if (ret == WOLFSSL_SUCCESS) break;
+        int err = wolfSSL_get_error(ssl, ret);
+        if (err != WOLFSSL_ERROR_WANT_READ && err != WOLFSSL_ERROR_WANT_WRITE) break;
+        /* Overflow-safe 15-second deadline: subtract avoids wrap-around issues */
+        if ((int32_t)(HAL_GetTick() - t_start) > 15000) break;
+        fd_set rfds; struct timeval stv = {0, 10000};   /* 10ms select slice */
+        FD_ZERO(&rfds); FD_SET((unsigned)fd, &rfds);
+        if (select(fd + 1, &rfds, NULL, NULL, &stv) < 0) break;
+        osDelay(1);  /* 1 tick yield so LwIP can drain ETH DMA RX */
+    } while (1);
+    uint32_t t_end = HAL_GetTick();
 
     uint32_t elapsed = 0;
     if (ret == WOLFSSL_SUCCESS) {
@@ -2613,6 +2634,7 @@ static void run_scenario(const Scenario *sc)
            TLS_REPEAT_COUNT, sc->port ? sc->port : TLS_SERVER_PORT);
 
     for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
+        printf("[TLS] [%d/%d] %s\n", i + 1, TLS_REPEAT_COUNT, sc->name);
         uint32_t ms = do_handshake(ctx, sc);
         samples[i] = ms;
         if (ms > 0) {
@@ -2629,8 +2651,9 @@ static void run_scenario(const Scenario *sc)
             errors++;
             if (errors >= 3) break;
         }
-        if ((i + 1) % 5 == 0)
-            printf("[TLS] %d/%d\n", i + 1, TLS_REPEAT_COUNT);
+        printf("[TLS] [%d/%d] %s → %s (%lu ms)\n",
+               i + 1, TLS_REPEAT_COUNT, sc->name,
+               ms > 0 ? "OK" : "ERR", (unsigned long)ms);
         osDelay(200);
     }
 
