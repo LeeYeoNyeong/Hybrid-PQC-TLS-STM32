@@ -1782,8 +1782,8 @@ enum Misc {
     /* SPHINCS+-SHAKE-simple OQS codepoints (major=0xFE) */
     SPHINCS_SA_MAJOR              = 0xFE,
     SPHINCS_FAST_LEVEL1_SA_MINOR  = 0xC2,  /* 0xFEC2 sphincsshake128fsimple */
-    SPHINCS_FAST_LEVEL3_SA_MINOR  = 0x6D,  /* 0xFE6D sphincsshake192fsimple */
-    SPHINCS_FAST_LEVEL5_SA_MINOR  = 0x6F,  /* 0xFE6F sphincsshake256fsimple */
+    SPHINCS_FAST_LEVEL3_SA_MINOR  = 0xC8,  /* 0xFEC8 sphincsshake192fsimple (OQS codepoint) */
+    SPHINCS_FAST_LEVEL5_SA_MINOR  = 0xCC,  /* 0xFECC sphincsshake256fsimple (OQS codepoint) */
     SPHINCS_SMALL_LEVEL1_SA_MINOR = 0x6C,  /* 0xFE6C sphincsshake128ssimple */
     SPHINCS_SMALL_LEVEL3_SA_MINOR = 0x6E,  /* 0xFE6E sphincsshake192ssimple */
     SPHINCS_SMALL_LEVEL5_SA_MINOR = 0x70,  /* 0xFE70 sphincsshake256ssimple */

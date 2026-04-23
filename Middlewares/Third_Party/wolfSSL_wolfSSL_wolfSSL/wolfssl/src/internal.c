@@ -3285,6 +3285,16 @@ static WC_INLINE void AddSuiteHashSigAlgo(byte* hashSigAlgo, byte macAlgo,
                 SPHINCS_SA_MAJOR, SPHINCS_FAST_LEVEL1_SA_MINOR);
         }
         else
+        if (sigAlgo == sphincs_fast_level3_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                SPHINCS_SA_MAJOR, SPHINCS_FAST_LEVEL3_SA_MINOR);
+        }
+        else
+        if (sigAlgo == sphincs_fast_level5_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                SPHINCS_SA_MAJOR, SPHINCS_FAST_LEVEL5_SA_MINOR);
+        }
+        else
     #endif /* HAVE_SPHINCS */
     #ifdef HAVE_DILITHIUM
         if (sigAlgo == dilithium_level2_sa_algo) {
@@ -3389,10 +3399,13 @@ void InitSuitesHashSigAlgo(byte* hashSigAlgo, int haveSig, int tls1_2,
     }
 #endif /* HAVE_FALCON */
 #ifdef HAVE_SPHINCS
-    /* Unconditionally advertise SPHINCS+ sigalgs when compiled in — Stage 4
-     * standalone verify-only build lacks a SIG_SPHINCS bitmask, so we bypass
-     * the haveSig gate. */
+    /* Unconditionally advertise all SPHINCS+ fast variants (L1/L3/L5).
+     * Standalone verify-only build lacks SIG_SPHINCS bitmask, so bypass gate. */
     AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_fast_level1_sa_algo, keySz,
+        &idx);
+    AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_fast_level3_sa_algo, keySz,
+        &idx);
+    AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_fast_level5_sa_algo, keySz,
         &idx);
 #endif /* HAVE_SPHINCS */
 #ifdef HAVE_DILITHIUM

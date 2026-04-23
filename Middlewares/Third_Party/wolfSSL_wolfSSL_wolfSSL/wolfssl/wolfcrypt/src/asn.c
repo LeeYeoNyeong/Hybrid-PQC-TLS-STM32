@@ -4396,13 +4396,13 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte sigSphincsFast_Level1Oid[] =
         {43, 206, 15, 6, 7, 13};
 
-    /* Sphincs Fast Level 3: 1 3 9999 6 8 3 */
+    /* Sphincs Fast Level 3: 1.3.9999.6.8.10 (oqs-provider sphincsshake192fsimple) */
     static const byte sigSphincsFast_Level3Oid[] =
-        {43, 206, 15, 6, 8, 3};
+        {43, 206, 15, 6, 8, 10};
 
-    /* Sphincs Fast Level 5: 1 3 9999 6 9 3 */
+    /* Sphincs Fast Level 5: 1.3.9999.6.9.10 (oqs-provider sphincsshake256fsimple) */
     static const byte sigSphincsFast_Level5Oid[] =
-        {43, 206, 15, 6, 9, 3};
+        {43, 206, 15, 6, 9, 10};
 
     /* Sphincs Small Level 1: 1 3 9999 6 7 10 */
     static const byte sigSphincsSmall_Level1Oid[] =
@@ -4492,13 +4492,13 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte keySphincsFast_Level1Oid[] =
         {43, 206, 15, 6, 7, 13};
 
-    /* Sphincs Fast Level 3: 1 3 9999 6 8 3 */
+    /* Sphincs Fast Level 3: 1.3.9999.6.8.10 (oqs-provider sphincsshake192fsimple) */
     static const byte keySphincsFast_Level3Oid[] =
-        {43, 206, 15, 6, 8, 3};
+        {43, 206, 15, 6, 8, 10};
 
-    /* Sphincs Fast Level 5: 1 3 9999 6 9 3 */
+    /* Sphincs Fast Level 5: 1.3.9999.6.9.10 (oqs-provider sphincsshake256fsimple) */
     static const byte keySphincsFast_Level5Oid[] =
-        {43, 206, 15, 6, 9, 3};
+        {43, 206, 15, 6, 9, 10};
 
     /* Sphincs Small Level 1: 1 3 9999 6 7 10 */
     static const byte keySphincsSmall_Level1Oid[] =
