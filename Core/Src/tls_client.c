@@ -4046,8 +4046,8 @@ typedef struct {
  * that already have good data, then rebuild & reflash to re-run only the
  * remaining scenarios. Must be NULL-terminated. */
 static const char *const g_skip_scenarios[] = {
-    /* 2026-04-22: measuring SPHINCS+ alone to avoid heap fragmentation
-     * from prior scenarios (SPHINCS+ verify is heap-heavy). */
+    /* 2026-04-23: FALCON HardFault (BFAR=0x2FDD001B after cert recv) under investigation.
+     * Run SPHINCS+ only to complete the dataset. */
     "ECDSA_L1", "ECDSA_L3", "ECDSA_L5",
     "MLDSA_L1", "MLDSA_L3", "MLDSA_L5",
     "RELATED_L1", "RELATED_L3", "RELATED_L5",

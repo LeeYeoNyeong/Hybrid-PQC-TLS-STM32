@@ -92,17 +92,49 @@
   | SPHINCS_FAST_L3 | 100 | 0 | 5514.4ms | [5500.0, 5528.8] |
   | SPHINCS_FAST_L5 | 100 | 0 | 5911.3ms | [5895.2, 5927.4] |
 
-### [TODO] PR #6 (feat/#4-repeat-count-100) merge
+### [DONE] PR #6 (feat/#4-repeat-count-100) merge
 - **태그**: `#git`
-- TLS_REPEAT_COUNT=100 브랜치 merge 대기 중
+- merge 완료 (2026-04-23 세션 4)
+
+### [DONE] PR #7 (feat/#5-sphincs-l3-l5) merge
+- **태그**: `#git`
+- merge 완료 (2026-04-23 세션 4)
+
+---
+
+## 2026-04-23 (세션 4)
+
+### [DONE] 전체 24/26 시나리오 n=100 벤치마크
+- **태그**: `#benchmark` `#feat`
+- 브랜치: `feat/#8-full-benchmark-n100`
+- Run 1: 21개 시나리오 (ECDSA/MLDSA/RELATED/CATALYST/CHAMELEON/DUAL/COMPOSITE × L1/L3/L5) — errors=0
+- Run 2: SPHINCS+ L1/L3/L5 — errors=0
+- FALCON L1/L5: **HardFault** (BusFault PRECISERR, BFAR=0x2FDD001B after cert recv) — 미해결
+- 결과 파일: `benchmark_n100_final.txt`
+- 주요 결과:
+  | 시나리오 | mean (ms) |
+  |---|---|
+  | ECDSA L1/L3/L5 | 345.8 / 600.0 / 701.0 |
+  | MLDSA L1/L3/L5 | 465.0 / 657.1 / 974.0 |
+  | RELATED L1/L3/L5 | 470.9 / 864.9 / 1195.1 |
+  | CATALYST L1/L3/L5 | 551.1 / 1005.2 / 1433.5 |
+  | CHAMELEON L1/L3/L5 | 542.1 / 988.4 / 1406.3 |
+  | DUAL L1/L3/L5 | 471.2 / 864.6 / 1195.0 |
+  | COMPOSITE L1/L3/L5 | 521.0 / 962.8 / 1390.2 |
+  | SPHINCS_FAST L1/L3/L5 | 3670.6 / 5516.9 / 5911.7 |
+
+### [TODO] FALCON HardFault 원인 조사
+- **태그**: `#bug` `#falcon` `#wolfssl`
+- BusFault PRECISERR, BFAR=0x2FDD001B
+- Certificate (3615B) 수신 직후 발생
+- HardFault 핸들러 PC 출력 버그(mov %0, pc → 핸들러 자체 PC) → 실제 결함 주소 불명
+- 조사 필요: stacked PC 읽기 위한 핸들러 수정 → 재플래시 → 재현
 
 ---
 
 ## 미완료 항목 (TODO)
 
-- [ ] PR #6 (feat/#4-repeat-count-100) merge — TLS_REPEAT_COUNT=100 브랜치
-- [ ] feat/#5-sphincs-l3-l5 → main PR/merge
-- [ ] skip list 제거 후 전체 25개+ 시나리오 n=100 벤치마크
+- [ ] FALCON HardFault 원인 조사 (stm32f4xx_it.c 핸들러 stacked PC 출력으로 수정)
 - [ ] Vault 05-Progress-Changelog.md 업데이트
 
 ---
