@@ -117,11 +117,14 @@
 #define LWIP_NETCONN        1
 #define LWIP_TCP            1
 #define MEM_SIZE            8192
-#define PBUF_POOL_SIZE      8
-#define MEMP_NUM_TCP_SEG    16
+#define PBUF_POOL_SIZE      10              /* +2 vs original to handle large cert bursts */
+#define MEMP_NUM_TCP_SEG    20
 #define TCP_MSS             1460
-#define TCP_WND             (4 * TCP_MSS)
+#define TCP_WND             (8 * TCP_MSS)   /* 11680B: within PBUF_POOL_SIZE=10 sanity limit */
 #define TCP_SND_BUF         (4 * TCP_MSS)
+#define LWIP_SO_RCVTIMEO    1              /* enable SO_RCVTIMEO — was 0 (no-op before) */
+#undef  DEFAULT_TCP_RECVMBOX_SIZE
+#define DEFAULT_TCP_RECVMBOX_SIZE  10      /* was 6; deeper mbox for large TLS records */
 /* USER CODE END 1 */
 
 #ifdef __cplusplus

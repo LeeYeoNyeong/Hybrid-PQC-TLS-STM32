@@ -3279,6 +3279,13 @@ static WC_INLINE void AddSuiteHashSigAlgo(byte* hashSigAlgo, byte macAlgo,
         }
         else
     #endif /* HAVE_FALCON */
+    #ifdef HAVE_SPHINCS
+        if (sigAlgo == sphincs_fast_level1_sa_algo) {
+            ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
+                SPHINCS_SA_MAJOR, SPHINCS_FAST_LEVEL1_SA_MINOR);
+        }
+        else
+    #endif /* HAVE_SPHINCS */
     #ifdef HAVE_DILITHIUM
         if (sigAlgo == dilithium_level2_sa_algo) {
             ADD_HASH_SIG_ALGO(hashSigAlgo, inOutIdx,
@@ -17017,8 +17024,14 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                     FreeX509(&ssl->peerCert);
                     InitX509(&ssl->peerCert, 0, ssl->heap);
                     copyRet = CopyDecodedToX509(&ssl->peerCert, args->dCert);
+                    /* Storing peerCert is for caller convenience (wolfSSL_get_peer_certificate).
+                     * Large PQ certs (e.g. SPHINCS+ with 17 KB CA sig) can fail here
+                     * due to heap fragmentation. Do not abort the handshake - the peer
+                     * public key is loaded separately from args->dCert below. */
                     if (copyRet == WC_NO_ERR_TRACE(MEMORY_E)) {
-                        args->fatal = 1;
+                        WOLFSSL_MSG("CopyDecodedToX509 MEMORY_E - continuing handshake");
+                        FreeX509(&ssl->peerCert);
+                        InitX509(&ssl->peerCert, 0, ssl->heap);
                     }
                 }
             #endif /* KEEP_PEER_CERT */

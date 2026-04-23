@@ -2240,9 +2240,8 @@ typedef struct {
  * that already have good data, then rebuild & reflash to re-run only the
  * remaining scenarios. Must be NULL-terminated. */
 static const char *const g_skip_scenarios[] = {
-    /* 2026-04-21: these 21 scenarios already captured in Round 4.
-     * Only FALCON_L1, FALCON_L5, SPHINCS_FAST_L1 need re-measurement
-     * after OQS codepoint alignment to wolfSSL. */
+    /* 2026-04-22: measuring SPHINCS+ alone to avoid heap fragmentation
+     * from prior scenarios (SPHINCS+ verify is heap-heavy). */
     "ECDSA_L1", "ECDSA_L3", "ECDSA_L5",
     "MLDSA_L1", "MLDSA_L3", "MLDSA_L5",
     "RELATED_L1", "RELATED_L3", "RELATED_L5",
@@ -2250,6 +2249,7 @@ static const char *const g_skip_scenarios[] = {
     "CHAMELEON_L1", "CHAMELEON_L3", "CHAMELEON_L5",
     "DUAL_L1", "DUAL_L3", "DUAL_L5",
     "COMPOSITE_L1", "COMPOSITE_L3", "COMPOSITE_L5",
+    "FALCON_L1", "FALCON_L5",
     NULL
 };
 
@@ -2354,17 +2354,16 @@ static int configure_scenario_ctx(WOLFSSL_CTX *ctx, const Scenario *sc)
      * server-cert signature is still verified in CertVerify, which is what
      * we're benchmarking. */
     if (sc->type == CERT_FALCON || sc->type == CERT_SPHINCS_FAST) {
+        /* PQ CAs are self-signed OQS roots that wolfSSL can't verify; skip
+         * trust anchor loading and disable peer verify. The PQ signature in
+         * CertificateVerify is still validated in the handshake path, which
+         * is what we're benchmarking. sig_names[] doesn't include Falcon or
+         * SPHINCS+ entries, so we must NOT call set1_sigalgs_list (it would
+         * fail parsing and blank the suite's hashSigAlgoSz, causing the
+         * ClientHello signature_algorithms extension to be omitted and the
+         * server to reply with decode_error). The default hashSigAlgo list
+         * built by AddSuiteHashSigAlgo already includes the PQ sigalg. */
         wolfSSL_CTX_set_verify(ctx, WOLFSSL_VERIFY_NONE, NULL);
-        /* Explicitly advertise the PQ sigalg so server accepts ClientHello.
-         * Falcon is auto-advertised via AddSuiteHashSigAlgo, but this Stage 4
-         * tree's SPHINCS+ path lacks a SIG_SPHINCS bitmask, so force it. */
-        if (sc->type == CERT_SPHINCS_FAST) {
-            wolfSSL_CTX_set1_sigalgs_list(ctx, "sphincs_fast_level1");
-        } else if (sc->type == CERT_FALCON && sc->level == SEC_LEVEL_1) {
-            wolfSSL_CTX_set1_sigalgs_list(ctx, "falcon_level1");
-        } else if (sc->type == CERT_FALCON && sc->level == SEC_LEVEL_5) {
-            wolfSSL_CTX_set1_sigalgs_list(ctx, "falcon_level5");
-        }
         return WOLFSSL_SUCCESS;
     }
 
@@ -2485,9 +2484,16 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
     if (fd < 0) return 0;
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        close(fd);
-        return 0;
+        printf("[TLS] TCP connect failed errno=%d\n", errno);
+        close(fd); return 0;
     }
+    printf("[TLS] TCP OK, starting TLS (t=%lu)\n", (unsigned long)HAL_GetTick());
+
+    /* SO_RCVTIMEO: 20-second hard cap on blocking recv inside wolfSSL_connect.
+     * LWIP_SO_RCVTIMEO=1 in lwipopts.h makes this effective.
+     * SPX_YIELD() in sphincs.c also lets tcpip_thread run during 3.2s verify. */
+    struct timeval tv = {.tv_sec = 20, .tv_usec = 0};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     WOLFSSL *ssl = wolfSSL_new(ctx);
     if (!ssl) { close(fd); return 0; }
@@ -2505,7 +2511,7 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
     ++hs_count;
     uint32_t t_start = HAL_GetTick();
     int ret = wolfSSL_connect(ssl);
-    uint32_t t_end   = HAL_GetTick();
+    uint32_t t_end = HAL_GetTick();
 
     uint32_t elapsed = 0;
     if (ret == WOLFSSL_SUCCESS) {
@@ -2614,6 +2620,7 @@ static void run_scenario(const Scenario *sc)
            TLS_REPEAT_COUNT, sc->port ? sc->port : TLS_SERVER_PORT);
 
     for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
+        printf("[TLS] [%d/%d] %s\n", i + 1, TLS_REPEAT_COUNT, sc->name);
         uint32_t ms = do_handshake(ctx, sc);
         samples[i] = ms;
         if (ms > 0) {
@@ -2630,8 +2637,9 @@ static void run_scenario(const Scenario *sc)
             errors++;
             if (errors >= 3) break;
         }
-        if ((i + 1) % 5 == 0)
-            printf("[TLS] %d/%d\n", i + 1, TLS_REPEAT_COUNT);
+        printf("[TLS] [%d/%d] %s → %s (%lu ms)\n",
+               i + 1, TLS_REPEAT_COUNT, sc->name,
+               ms > 0 ? "OK" : "ERR", (unsigned long)ms);
         osDelay(200);
     }
 
