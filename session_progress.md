@@ -75,21 +75,22 @@
     -tls1_3 -www -provider oqsprovider -provider default &
   ```
 
-### [WIP] wolfSSL OID 수정 (STM32)
-- **태그**: `#fix` `#wolfssl` `#oid`
-- 문제: wolfSSL 구OID(6.8.3, 6.9.3) ≠ oqs-provider 신OID(6.8.10, 6.9.10)
-- L1 OID(6.7.13)는 일치 → L1만 동작했던 원인
-- 수정 파일:
-  - `wolfcrypt/src/asn.c`: sigSphincsFast_Level3Oid, keySphincsFast_Level3Oid → {43,206,15,6,8,10}
-  - `wolfcrypt/src/asn.c`: sigSphincsFast_Level5Oid, keySphincsFast_Level5Oid → {43,206,15,6,9,10}
-  - `wolfssl/wolfcrypt/oid_sum.h`: SPHINCS_FAST_LEVEL3k old=288, new=0x06f0c423
-  - `wolfssl/wolfcrypt/oid_sum.h`: SPHINCS_FAST_LEVEL5k old=289, new=0x06f0c422
-- `src/internal.c`: AddSuiteHashSigAlgo에 L3/L5 sigalg 추가
-- **남은 작업**: tls_client.c에 CA_SPHINCS_FAST_L3/L5 PEM 내장 + 시나리오 추가
+### [DONE] wolfSSL SPHINCS+ L3/L5 TLS sigalg wire byte 수정
+- **태그**: `#fix` `#wolfssl` `#oid` `#sphincs`
+- 3개 버그 동시 수정:
+  1. `src/internal.c` AddSuiteHashSigAlgo: HAVE_SPHINCS 블록에 L1만 있고 L3/L5 없어 {0x00,0x12}/{0x00,0x13} 잘못된 wire byte 기록됨 → L3/L5 case 추가
+  2. `wolfssl/internal.h` SA_MINOR: 0x6D/0x6F(구버전) → 0xC8/0xCC(oqs-provider 실제 codepoint)
+  3. `wolfSSL_conf.h` WOLFSSL_MAX_HANDSHAKE_SZ: 40960 → 65536 (L5 서명 49856B 허용, size cap check만 — 실제 버퍼 할당 아님)
+- 커밋: `c04f981` / 브랜치: `feat/#5-sphincs-l3-l5`
 
-### [TODO] STM32 빌드 & 플래시 & 검증
-- **태그**: `#build` `#flash` `#benchmark`
-- L3/L5 시나리오 추가 후 빌드 → 플래시 → UART 수집
+### [DONE] SPHINCS+ L3/L5 STM32 검증 (n=100)
+- **태그**: `#benchmark` `#build` `#flash` `#sphincs`
+- 결과 (2026-04-23, 로그: /tmp/uart_final_fix_1410.log):
+  | 시나리오 | n | errors | mean | 95% CI |
+  |---|---|---|---|---|
+  | SPHINCS_FAST_L1 | 100 | 0 | 3675.6ms | [3661.0, 3690.3] |
+  | SPHINCS_FAST_L3 | 100 | 0 | 5514.4ms | [5500.0, 5528.8] |
+  | SPHINCS_FAST_L5 | 100 | 0 | 5911.3ms | [5895.2, 5927.4] |
 
 ### [TODO] PR #6 (feat/#4-repeat-count-100) merge
 - **태그**: `#git`
@@ -99,11 +100,9 @@
 
 ## 미완료 항목 (TODO)
 
-- [ ] wolfSSL asn.c에 OID 충돌 체크 로직 확인 (line 7078 SPHINCS_FAST_LEVEL3 collision 주석)
-- [ ] tls_client.c: CA_SPHINCS_FAST_L3, CA_SPHINCS_FAST_L5 PEM 내장
-- [ ] tls_client.c: scenarios[] 에 SPHINCS_FAST_L3(11183), SPHINCS_FAST_L5(11185) 추가
-- [ ] STM32 빌드 → 플래시 → L3/L5 핸드셰이크 검증 (n=20 우선)
-- [ ] n=100 전체 벤치마크 (25개 시나리오)
+- [ ] PR #6 (feat/#4-repeat-count-100) merge — TLS_REPEAT_COUNT=100 브랜치
+- [ ] feat/#5-sphincs-l3-l5 → main PR/merge
+- [ ] skip list 제거 후 전체 25개+ 시나리오 n=100 벤치마크
 - [ ] Vault 05-Progress-Changelog.md 업데이트
 
 ---
