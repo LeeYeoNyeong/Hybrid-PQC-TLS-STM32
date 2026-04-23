@@ -763,12 +763,12 @@
 #undef  HAVE_SPHINCS
 #define HAVE_SPHINCS
 
-/* Handshake reassembly buffer sized for SPHINCS+ fast-L1 (17KB sig).
- * Reduced from 65536 to conserve heap during SPHINCS+ verify on STM32F4
- * which already consumes ~100KB for CTX+SSL+cert-chain. Falcon-1024 cert
- * chain (6.6KB) and Composite-L5 (~11KB) also fit comfortably. */
+/* Sig-size cap for SPHINCS+ fast variants:
+ *   L1=17088B, L3=35664B, L5=49856B
+ * WOLFSSL_MAX_HANDSHAKE_SZ is only a size-check limit (tls13.c:maxSigSz),
+ * NOT a static buffer — no heap impact. Set to 65536 so L5 passes. */
 #ifndef WOLFSSL_MAX_HANDSHAKE_SZ
-#define WOLFSSL_MAX_HANDSHAKE_SZ (40960)
+#define WOLFSSL_MAX_HANDSHAKE_SZ (65536)
 #endif
 
 /* WOLFSSL_DILITHIUM_NO_MAKE_KEY removed: cert_bench_task needs keygen */
