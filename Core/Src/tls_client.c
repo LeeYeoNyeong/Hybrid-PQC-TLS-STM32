@@ -4046,16 +4046,6 @@ typedef struct {
  * that already have good data, then rebuild & reflash to re-run only the
  * remaining scenarios. Must be NULL-terminated. */
 static const char *const g_skip_scenarios[] = {
-    /* 2026-04-22: measuring SPHINCS+ alone to avoid heap fragmentation
-     * from prior scenarios (SPHINCS+ verify is heap-heavy). */
-    "ECDSA_L1", "ECDSA_L3", "ECDSA_L5",
-    "MLDSA_L1", "MLDSA_L3", "MLDSA_L5",
-    "RELATED_L1", "RELATED_L3", "RELATED_L5",
-    "CATALYST_L1", "CATALYST_L3", "CATALYST_L5",
-    "CHAMELEON_L1", "CHAMELEON_L3", "CHAMELEON_L5",
-    "DUAL_L1", "DUAL_L3", "DUAL_L5",
-    "COMPOSITE_L1", "COMPOSITE_L3", "COMPOSITE_L5",
-    "FALCON_L1", "FALCON_L5",
     NULL
 };
 
