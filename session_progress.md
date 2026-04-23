@@ -132,9 +132,53 @@
 
 ---
 
+## 2026-04-23 (세션 5) — FALCON HardFault 근본 원인 규명 & 수정
+
+### [DONE] HardFault 핸들러 개선 (naked trampoline + stacked frame 덤프)
+- **태그**: `#fix` `#hardfault` `#debugging`
+- `Core/Src/stm32f4xx_it.c`: naked 트램폴린에서 EXC_RETURN bit2로 MSP/PSP 분기 → C 핸들러에서 stacked PC(`sp[6]`)/LR(`sp[5]`) + R0-R3/R12/xPSR/CFSR/HFSR/BFAR/MMFAR/stack dump 16 words 출력
+- BFARVALID 체크로 stale 값 구분, CFSR write-1-to-clear
+- 주의: `pcTaskGetName()` 추가 시 부팅 실패 → FreeRTOS 의존성 제거 후 안정화
+
+### [DONE] FALCON HardFault 근본 원인 규명
+- **태그**: `#bug` `#falcon` `#stack-overflow`
+- 캡처된 PANIC (uart_falcon_5min_2042.log):
+  - `CFSR=0x00008200` (BFARVALID + PRECISERR), `HFSR=0x40000000` (FORCED)
+  - `BFAR=0x1E7B129A` (invalid region), `R3=0x1E7B1296` (corrupted pointer)
+  - `PC=0x08009032` → `xTaskIncrementTick` @ tasks.c:2761, `LR=0x0800B436` → `xPortSysTickHandler`
+  - 실패 명령: `ldr r3, [r3, #4]` — 손상된 FreeRTOS task list 노드 traversal
+- **근본 원인**: **tlsPerf 태스크 스택 20KB 부족** — Falcon verify가 스택에 8.5KB 배열 (`h_ntt`/`c0`/`s2`/`tmp` 각 2KB) 할당 + wolfSSL ASN/CertVerify 프레임 → 20KB 초과 시 인접 힙의 FreeRTOS task list 노드 손상 → 다음 SysTick에서 BusFault
+- **왜 `configCHECK_FOR_STACK_OVERFLOW=2`가 못 잡았나**: method 2는 context switch에서만 canary 검사 — 단일 콜 체인 overflow 후 return되면 canary 복원되어 hook 미발동
+
+### [DONE] 수정 및 검증
+- **태그**: `#fix` `#stack` `#heap-alloc`
+- 1차 시도: `Core/Src/main.c` stack 20KB→32KB → Falcon 해결, 하지만 SPHINCS+ L5 heap 부족 (err=-125) 회귀
+- **최종 수정**:
+  - `Middlewares/Third_Party/wolfSSL/.../falcon.c` `wc_falcon_verify_msg` — 스택 배열 4개 (h_ntt/c0/s2/tmp, 총 ~8KB)를 XMALLOC/XFREE로 힙 할당 전환 (cleanup label 도입)
+  - `Core/Src/main.c`: tlsPerf 스택 20KB 유지 (heap 예산 보존)
+- 검증 결과 (n=100):
+  - FALCON_L1 errors=0 mean=196.0ms (9b0f/100 pass)
+  - FALCON_L5 errors=0 mean=244.1ms ✅
+  - SPHINCS_FAST_L1 errors=0 mean=3839.7ms ✅
+  - SPHINCS_FAST_L3/L5 errors=0 (정상)
+- 브랜치: `fix/#10-falcon-hardfault`
+
+### [NOTE] 벤치마크 운영 주의사항
+- **스테일 ESTABLISHED 연결 문제**: 보드 리셋 중 TCP 연결이 끊기면 openssl s_server가 ESTABLISHED 소켓을 그대로 들고 있음 → 이후 재시도 시 WANT_READ 타임아웃(err=2)
+- 3회 연속 실패 시 시나리오 조기 abort → 해당 시나리오만 errors=3, mean=0으로 기록됨
+- 해결: 벤치마크 시작 전 `lsof -ti:포트 | xargs kill -9`로 해당 포트 서버 재시작
+
+### 주요 artifact
+- 캡처 로그: `uart_falcon_5min_2042.log` (PANIC full dump)
+- 검증 로그: `uart_falcon_32k_v2_2045.log` (6× Falcon OK)
+
+---
+
 ## 미완료 항목 (TODO)
 
-- [ ] FALCON HardFault 원인 조사 (stm32f4xx_it.c 핸들러 stacked PC 출력으로 수정)
+- [ ] 전체 n=100 × 26 시나리오 최종 벤치마크 완주 (현재 실행 중)
+- [ ] `benchmark_n100_final.txt` 갱신 + `project_goals.md` 최종 표 업데이트
+- [ ] `fix/#10-falcon-hardfault` 커밋 + PR 생성 + merge
 - [ ] Vault 05-Progress-Changelog.md 업데이트
 
 ---

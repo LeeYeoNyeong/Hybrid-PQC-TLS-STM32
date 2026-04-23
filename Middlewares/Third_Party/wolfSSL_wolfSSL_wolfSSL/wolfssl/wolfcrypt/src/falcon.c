@@ -221,15 +221,18 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
                           const byte *msg, word32 msgLen,
                           int *res, falcon_key *key) {
     int logn, n;
+    int ret = SIG_VERIFY_E;
     byte sig_hdr, pk_hdr;
     const byte *nonce, *comp_sig;
     word32 comp_sig_len;
 
-    /* Stack arrays — max size for Falcon-1024 */
-    uint16_t h_ntt[FALCON_MAX_N];
-    uint16_t c0[FALCON_MAX_N];
-    int16_t  s2[FALCON_MAX_N];
-    byte     tmp[FALCON1024_TMP_SZ];  /* 2048 bytes — align to uint16_t */
+    /* Heap-allocated working buffers — too large for tlsPerf 20KB stack
+     * (~8.5KB total would corrupt adjacent FreeRTOS task list nodes during
+     * Falcon CertVerify on STM32F4 + FreeRTOS). */
+    uint16_t *h_ntt = NULL;
+    uint16_t *c0    = NULL;
+    int16_t  *s2    = NULL;
+    byte     *tmp   = NULL;
 
     inner_shake256_context sc;
     size_t decoded;
@@ -263,6 +266,16 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
 
     n = 1 << logn;
 
+    /* ---- allocate working buffers ---- */
+    h_ntt = (uint16_t *)XMALLOC(FALCON_MAX_N * sizeof(uint16_t), NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    c0    = (uint16_t *)XMALLOC(FALCON_MAX_N * sizeof(uint16_t), NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    s2    = (int16_t  *)XMALLOC(FALCON_MAX_N * sizeof(int16_t),  NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    tmp   = (byte     *)XMALLOC(FALCON1024_TMP_SZ,               NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    if (h_ntt == NULL || c0 == NULL || s2 == NULL || tmp == NULL) {
+        ret = MEMORY_E;
+        goto cleanup;
+    }
+
     /* ---- locate nonce and compressed signature ---- */
     nonce    = sig + 1;
     comp_sig = sig + 1 + FALCON_NONCE_SIZE;
@@ -271,14 +284,14 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
     /* ---- decode public key h -> NTT+Montgomery form ---- */
     pk_hdr = key->p[0];
     if ((int)(pk_hdr) != logn)
-        return SIG_VERIFY_E;
+        goto cleanup;
 
     decoded = PQCLEAN_FALCON512_CLEAN_modq_decode(
                   h_ntt, (unsigned)logn,
                   key->p + 1,                   /* skip 1-byte header */
                   (size_t)(falcon_pubkey_size(key->level) - 1));
     if (decoded == 0)
-        return SIG_VERIFY_E;
+        goto cleanup;
 
     PQCLEAN_FALCON512_CLEAN_to_ntt_monty(h_ntt, (unsigned)logn);
 
@@ -287,7 +300,7 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
                   s2, (unsigned)logn,
                   comp_sig, (size_t)comp_sig_len);
     if (decoded == 0)
-        return SIG_VERIFY_E;
+        goto cleanup;
 
     /* ---- hash nonce || msg to get polynomial c0 ---- */
     inner_shake256_init(&sc);
@@ -297,21 +310,26 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
 
     if (sc.buf == NULL) {
         inner_shake256_ctx_release(&sc);
-        return MEMORY_E;
+        ret = MEMORY_E;
+        goto cleanup;
     }
 
     PQCLEAN_FALCON512_CLEAN_hash_to_point_vartime(&sc, c0, (unsigned)logn);
     inner_shake256_ctx_release(&sc);
 
     /* ---- algebraic verification ---- */
-    /* verify_raw checks: s1 + h*s2 = c0 (in NTT domain) and norm bound */
-    /* tmp must be at least 2*n bytes, aligned to uint16_t */
     if (PQCLEAN_FALCON512_CLEAN_verify_raw(
             c0, s2, h_ntt, (unsigned)logn, tmp) == 1) {
         *res = 1;
     }
+    ret = 0;
 
-    return 0;
+cleanup:
+    if (h_ntt) XFREE(h_ntt, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    if (c0)    XFREE(c0,    NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    if (s2)    XFREE(s2,    NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    if (tmp)   XFREE(tmp,   NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */

@@ -78,9 +78,9 @@ const osThreadAttr_t wolfCrypt_attributes = {
 osThreadId_t tlsPerfHandle;
 const osThreadAttr_t tlsPerf_attributes = {
   .name = "tlsPerf",
-  /* 20 KB — enough for SPHINCS+ verify (~1-2 KB stack) and Falcon verify
-   * (~4-6 KB stack) while freeing heap for wolfSSL's per-connection buffers
-   * that SPHINCS+ needs (~131 KB peak during CertVerify parsing). */
+  /* 20 KB — Falcon verify was overflowing this (8.5KB stack arrays +
+   * wolfSSL frames), fixed by moving its arrays to heap in falcon.c.
+   * Keeping 20KB preserves heap budget for SPHINCS+ L5 verify (~60KB). */
   .stack_size = 5120 * 4,
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
