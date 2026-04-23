@@ -10,7 +10,7 @@ extern "C" {
 #define TLS_SERVER_PORT  11111
 
 /* ── Measurement configuration ── */
-#define TLS_REPEAT_COUNT  20
+#define TLS_REPEAT_COUNT  100
 
 /* ── Scenario definitions ── */
 typedef enum {
