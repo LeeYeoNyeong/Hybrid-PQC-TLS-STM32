@@ -283,15 +283,19 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
 
     /* ---- decode public key h -> NTT+Montgomery form ---- */
     pk_hdr = key->p[0];
-    if ((int)(pk_hdr) != logn)
+    if ((int)(pk_hdr) != logn) {
+        ret = SIG_VERIFY_E;
         goto cleanup;
+    }
 
     decoded = PQCLEAN_FALCON512_CLEAN_modq_decode(
                   h_ntt, (unsigned)logn,
                   key->p + 1,                   /* skip 1-byte header */
                   (size_t)(falcon_pubkey_size(key->level) - 1));
-    if (decoded == 0)
+    if (decoded == 0) {
+        ret = SIG_VERIFY_E;
         goto cleanup;
+    }
 
     PQCLEAN_FALCON512_CLEAN_to_ntt_monty(h_ntt, (unsigned)logn);
 
@@ -299,8 +303,10 @@ int wc_falcon_verify_msg(const byte *sig, word32 sigLen,
     decoded = PQCLEAN_FALCON512_CLEAN_comp_decode(
                   s2, (unsigned)logn,
                   comp_sig, (size_t)comp_sig_len);
-    if (decoded == 0)
+    if (decoded == 0) {
+        ret = SIG_VERIFY_E;
         goto cleanup;
+    }
 
     /* ---- hash nonce || msg to get polynomial c0 ---- */
     inner_shake256_init(&sc);
