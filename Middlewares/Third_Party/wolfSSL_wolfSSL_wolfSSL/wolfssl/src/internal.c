@@ -3407,6 +3407,12 @@ void InitSuitesHashSigAlgo(byte* hashSigAlgo, int haveSig, int tls1_2,
         &idx);
     AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_fast_level5_sa_algo, keySz,
         &idx);
+    AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_small_level1_sa_algo, keySz,
+        &idx);
+    AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_small_level3_sa_algo, keySz,
+        &idx);
+    AddSuiteHashSigAlgo(hashSigAlgo, no_mac, sphincs_small_level5_sa_algo, keySz,
+        &idx);
 #endif /* HAVE_SPHINCS */
 #ifdef HAVE_DILITHIUM
     if (haveSig & SIG_DILITHIUM) {

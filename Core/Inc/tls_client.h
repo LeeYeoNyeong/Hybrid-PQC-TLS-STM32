@@ -22,7 +22,8 @@ typedef enum {
     CERT_RELATED      = 5,
     CERT_DUAL         = 6,
     CERT_FALCON       = 7,   /* Falcon-512 (L1) / Falcon-1024 (L5) */
-    CERT_SPHINCS_FAST = 8,   /* SPHINCS+-SHAKE-fast (L1=128f) */
+    CERT_SPHINCS_FAST  = 8,  /* SPHINCS+-SHAKE-fast (L1=128f) */
+    CERT_SPHINCS_SMALL = 9,  /* SPHINCS+-SHAKE-small: 128s(L1) 192s(L3) 256s(L5) */
     CERT_TYPE_COUNT
 } CertType;
 
