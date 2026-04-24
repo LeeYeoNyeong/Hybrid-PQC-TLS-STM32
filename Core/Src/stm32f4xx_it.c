@@ -81,29 +81,55 @@ void NMI_Handler(void)
 }
 
 /**
-  * @brief This function handles Hard fault interrupt.
+  * @brief C-level fault printer. Called from naked trampoline with stacked frame pointer.
+  * Stacked frame (Cortex-M4): [r0,r1,r2,r3,r12,lr,pc,xpsr]
   */
-void HardFault_Handler(void)
+void HardFault_Handler_C(uint32_t *sp, uint32_t exc_return)
 {
-  /* USER CODE BEGIN HardFault_IRQn 0 */
   extern int printf(const char *, ...);
-  volatile uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;  /* Configurable Fault Status */
-  volatile uint32_t hfsr = *(volatile uint32_t *)0xE000ED2C;  /* HardFault Status */
-  volatile uint32_t mmfar = *(volatile uint32_t *)0xE000ED34; /* MemManage Fault Address */
-  volatile uint32_t bfar  = *(volatile uint32_t *)0xE000ED38; /* BusFault Address */
-  uint32_t pc = 0, lr = 0;
-  __asm volatile ("mov %0, pc" : "=r"(pc));
-  __asm volatile ("mov %0, lr" : "=r"(lr));
-  printf("\n[PANIC] HardFault CFSR=0x%08lX HFSR=0x%08lX MMFAR=0x%08lX BFAR=0x%08lX PC=0x%08lX LR=0x%08lX\n",
+  uint32_t cfsr  = *(volatile uint32_t *)0xE000ED28;
+  uint32_t hfsr  = *(volatile uint32_t *)0xE000ED2C;
+  uint32_t mmfar = *(volatile uint32_t *)0xE000ED34;
+  uint32_t bfar  = *(volatile uint32_t *)0xE000ED38;
+  int bfar_valid = (cfsr >> 15) & 1;
+  int mmfar_valid = (cfsr >> 7) & 1;
+  int fpu_basic = (exc_return & 0x10) ? 1 : 0;
+  uint32_t r0 = sp[0], r1 = sp[1], r2 = sp[2], r3 = sp[3];
+  uint32_t r12 = sp[4], lr_stk = sp[5], pc_stk = sp[6], xpsr = sp[7];
+  printf("\n[PANIC] HardFault CFSR=0x%08lX HFSR=0x%08lX EXC=0x%08lX FP=%s\n",
          (unsigned long)cfsr, (unsigned long)hfsr,
-         (unsigned long)mmfar, (unsigned long)bfar,
-         (unsigned long)pc, (unsigned long)lr);
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
+         (unsigned long)exc_return, fpu_basic ? "basic" : "ext");
+  printf("  BFAR=0x%08lX %s  MMFAR=0x%08lX %s\n",
+         (unsigned long)bfar,  bfar_valid  ? "(valid)" : "(stale)",
+         (unsigned long)mmfar, mmfar_valid ? "(valid)" : "(stale)");
+  printf("  PC =0x%08lX  LR =0x%08lX  xPSR=0x%08lX\n",
+         (unsigned long)pc_stk, (unsigned long)lr_stk, (unsigned long)xpsr);
+  printf("  R0 =0x%08lX  R1 =0x%08lX  R2 =0x%08lX  R3 =0x%08lX  R12=0x%08lX\n",
+         (unsigned long)r0, (unsigned long)r1, (unsigned long)r2,
+         (unsigned long)r3, (unsigned long)r12);
+  printf("  SP =0x%08lX  stack dump:\n", (unsigned long)sp);
+  for (int i = 0; i < 16; i++) {
+    printf("    [sp+%02d]=0x%08lX\n", i*4, (unsigned long)sp[i]);
   }
+  *(volatile uint32_t *)0xE000ED28 = cfsr;  /* write-1-to-clear */
+  while (1) {}
+}
+
+/**
+  * @brief This function handles Hard fault interrupt.
+  * Naked trampoline: reads correct SP before compiler prologue can modify it,
+  * then tail-calls HardFault_Handler_C(sp, exc_return).
+  */
+__attribute__((naked)) void HardFault_Handler(void)
+{
+  __asm volatile (
+    "mov  r1, lr        \n"  /* r1 = EXC_RETURN (bit2: 0=MSP, 1=PSP) */
+    "tst  r1, #4        \n"
+    "ite  eq            \n"
+    "mrseq r0, msp      \n"  /* r0 = MSP if bit2=0 (handler mode or thread+MSP) */
+    "mrsne r0, psp      \n"  /* r0 = PSP if bit2=1 (thread mode + PSP, FreeRTOS tasks) */
+    "b    HardFault_Handler_C \n"
+  );
 }
 
 /**
