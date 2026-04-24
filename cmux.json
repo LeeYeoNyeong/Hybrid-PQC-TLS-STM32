@@ -1,0 +1,281 @@
+{
+  "commands": [
+    {
+      "id": "build-debug",
+      "label": "Build (Debug)",
+      "command": "cmake --build build/Debug"
+    },
+    {
+      "id": "build-release",
+      "label": "Build (Release)",
+      "command": "cmake --build build/Release"
+    },
+    {
+      "id": "flash",
+      "label": "Flash STM32F439 (Debug .elf)",
+      "command": "STM32_Programmer_CLI -c port=SWD -w build/Debug/Test_pqc_tls.elf -rst"
+    },
+    {
+      "id": "uart-capture",
+      "label": "UART Capture → uart_<timestamp>.log",
+      "command": "screen -L -Logfile uart_$(date +%Y%m%d_%H%M).log /dev/cu.usbmodem* 115200"
+    },
+    {
+      "id": "build-flash-capture",
+      "label": "Build → Flash → UART Capture",
+      "command": "cmake --build build/Debug && STM32_Programmer_CLI -c port=SWD -w build/Debug/Test_pqc_tls.elf -rst && sleep 2 && screen -L -Logfile uart_$(date +%Y%m%d_%H%M).log /dev/cu.usbmodem* 115200"
+    },
+    {
+      "id": "teammate-sonnet",
+      "label": "Claude Teammate Mode (Sonnet)",
+      "command": "cmux claude-teams --model sonnet"
+    },
+    {
+      "id": "teammate-opus",
+      "label": "Claude Teammate Mode (Opus — reviews)",
+      "command": "cmux claude-teams --model opus"
+    },
+    {
+      "id": "teammate-continue",
+      "label": "Claude Teammate Mode — resume last",
+      "command": "cmux claude-teams --continue"
+    },
+    {
+      "id": "bench-team",
+      "label": "Benchmark Pipeline Team (Orch + Build/Flash + UART)",
+      "workspace": {
+        "name": "Bench-Team",
+        "cwd": ".",
+        "color": "#F5A623",
+        "layout": {
+          "direction": "horizontal",
+          "split": 0.38,
+          "children": [
+            {
+              "pane": {
+                "surfaces": [
+                  {
+                    "type": "terminal",
+                    "name": "Orchestrator",
+                    "command": "cmux claude-teams --model sonnet",
+                    "focus": true
+                  }
+                ]
+              }
+            },
+            {
+              "direction": "vertical",
+              "split": 0.5,
+              "children": [
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "Build / Flash",
+                        "command": "bash -c 'echo \"[Build/Flash Worker ready]\"; exec $SHELL'"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "UART Capture",
+                        "command": "bash -c 'echo \"[UART Capture Worker ready]\"; exec $SHELL'"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-team",
+      "label": "Code Review Team (Orchestrator + Critic + Reviewer)",
+      "workspace": {
+        "name": "Review-Team",
+        "cwd": ".",
+        "color": "#E74C3C",
+        "layout": {
+          "direction": "horizontal",
+          "split": 0.38,
+          "children": [
+            {
+              "pane": {
+                "surfaces": [
+                  {
+                    "type": "terminal",
+                    "name": "Orchestrator",
+                    "command": "cmux claude-teams --model opus",
+                    "focus": true
+                  }
+                ]
+              }
+            },
+            {
+              "direction": "vertical",
+              "split": 0.5,
+              "children": [
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "Critic",
+                        "command": "bash -c 'echo \"[Critic ready — CRITICAL findings halt pipeline]\"; exec $SHELL'"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "Code Reviewer",
+                        "command": "bash -c 'echo \"[Code Reviewer ready]\"; exec $SHELL'"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parallel-workers",
+      "label": "Parallel Workers (Worker A: SPHINCS-small | Worker B: ML-KEM)",
+      "workspace": {
+        "name": "Parallel-Workers",
+        "cwd": ".",
+        "color": "#F5A623",
+        "layout": {
+          "direction": "horizontal",
+          "split": 0.35,
+          "children": [
+            {
+              "pane": {
+                "surfaces": [
+                  {
+                    "type": "terminal",
+                    "name": "Orchestrator 🟠",
+                    "command": "bash -c 'echo \"[Orchestrator — monitoring workers]\"; echo; while true; do echo \"=== $(date +%H:%M:%S) ===\"; git -C /Users/yn4103/Desktop/Test_pqc_tls worktree list; echo; sleep 10; done'",
+                    "focus": true
+                  }
+                ]
+              }
+            },
+            {
+              "direction": "vertical",
+              "split": 0.5,
+              "children": [
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "Worker A 🟣 feat/#12-sphincs-small",
+                        "command": "bash -c 'WT=/Users/yn4103/Desktop/Test_pqc_tls/.claude/worktrees/agent-a12d4520b560166f1; echo \"Worker A — SPHINCS+ small (Issue #12)\"; echo \"Worktree: $WT\"; echo; while true; do echo \"--- $(date +%H:%M:%S) ---\"; git -C \"$WT\" log --oneline -5 2>/dev/null; echo; git -C \"$WT\" status --short 2>/dev/null; echo; sleep 8; done'"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "Worker B 🔵 feat/#13-mlkem-hybrid-kem",
+                        "command": "bash -c 'WT=/Users/yn4103/Desktop/Test_pqc_tls/.claude/worktrees/agent-afdd94a0aca7e4d4b; echo \"Worker B — ML-KEM hybrid KEM (Issue #13)\"; echo \"Worktree: $WT\"; echo; while true; do echo \"--- $(date +%H:%M:%S) ---\"; git -C \"$WT\" log --oneline -5 2>/dev/null; echo; git -C \"$WT\" status --short 2>/dev/null; echo; sleep 8; done'"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "full-pipeline",
+      "label": "Full Pipeline (Orch + Build + Flash/UART + Analysis)",
+      "workspace": {
+        "name": "Full-Pipeline",
+        "cwd": ".",
+        "color": "#1ABC9C",
+        "layout": {
+          "direction": "horizontal",
+          "split": 0.35,
+          "children": [
+            {
+              "pane": {
+                "surfaces": [
+                  {
+                    "type": "terminal",
+                    "name": "Orchestrator",
+                    "command": "cmux claude-teams --model sonnet",
+                    "focus": true
+                  }
+                ]
+              }
+            },
+            {
+              "direction": "vertical",
+              "split": 0.34,
+              "children": [
+                {
+                  "pane": {
+                    "surfaces": [
+                      {
+                        "type": "terminal",
+                        "name": "Build",
+                        "command": "bash -c 'echo \"[Build Worker ready]\"; exec $SHELL'"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "direction": "vertical",
+                  "split": 0.5,
+                  "children": [
+                    {
+                      "pane": {
+                        "surfaces": [
+                          {
+                            "type": "terminal",
+                            "name": "Flash / UART",
+                            "command": "bash -c 'echo \"[Flash+UART Worker ready]\"; exec $SHELL'"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "pane": {
+                        "surfaces": [
+                          {
+                            "type": "terminal",
+                            "name": "Analysis",
+                            "command": "bash -c 'echo \"[Analysis Worker ready]\"; exec $SHELL'"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
