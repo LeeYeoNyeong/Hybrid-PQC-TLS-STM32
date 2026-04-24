@@ -97,7 +97,8 @@ static int spx_variant_index(byte level, byte optim) {
 #define SPX_OFFSET_LAYER      3   /* 1 byte: layer number */
 #define SPX_OFFSET_TREE       8   /* 8 bytes BE: tree index */
 #define SPX_OFFSET_TYPE      19   /* 1 byte: address type */
-#define SPX_OFFSET_KP_ADDR1  23   /* 1 byte: keypair address */
+#define SPX_OFFSET_KP_ADDR2  20   /* 1 byte: keypair address high byte (PQClean) */
+#define SPX_OFFSET_KP_ADDR1  23   /* 1 byte: keypair address low byte */
 #define SPX_OFFSET_CHAIN_ADDR 27  /* 1 byte: chain address */
 #define SPX_OFFSET_HASH_ADDR  31  /* 1 byte: hash address */
 #define SPX_OFFSET_TREE_HGT   27  /* 1 byte: tree height (alias of CHAIN) */
@@ -146,7 +147,9 @@ static void spx_set_type(spx_addr_t addr, word32 type) {
     ((byte *)addr)[SPX_OFFSET_TYPE] = (byte)type;
 }
 static void spx_set_keypair(spx_addr_t addr, word32 kp) {
-    ((byte *)addr)[SPX_OFFSET_KP_ADDR1] = (byte)kp;
+    /* Full 4-byte BE write to bytes 20-23: byte22=kp>>8, byte23=kp&0xFF
+     * (matches liboqs/NIST-ref addr[5]=htobe32(kp)) */
+    spx_u32_to_bytes(&((byte *)addr)[20], kp);
 }
 static void spx_set_chain(spx_addr_t addr, word32 chain) {
     ((byte *)addr)[SPX_OFFSET_CHAIN_ADDR] = (byte)chain;
@@ -169,7 +172,8 @@ static void spx_copy_subtree(spx_addr_t dst, const spx_addr_t src) {
 /* Copy layer+tree+keypair */
 static void spx_copy_keypair(spx_addr_t dst, const spx_addr_t src) {
     XMEMCPY(dst, src, SPX_OFFSET_TREE + 8);
-    ((byte *)dst)[SPX_OFFSET_KP_ADDR1] = ((const byte *)src)[SPX_OFFSET_KP_ADDR1];
+    /* Copy full 4-byte keypair word (bytes 20-23) */
+    XMEMCPY(&((byte *)dst)[20], &((const byte *)src)[20], 4);
 }
 
 /* ------------------------------------------------------------------ */
@@ -541,7 +545,6 @@ static int spx_shake_verify(const byte *sig, word32 sigLen,
     }
 
     if (ret == 0) {
-        /* Compare computed root with pk.root */
         if (XMEMCMP(root, pk_root, (size_t)p->n) != 0)
             ret = SIG_VERIFY_E;
     }
