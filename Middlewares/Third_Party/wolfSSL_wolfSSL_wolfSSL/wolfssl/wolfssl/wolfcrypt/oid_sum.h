@@ -202,12 +202,12 @@ enum Key_Sum {
     SPHINCS_FAST_LEVEL3k        = 288,           /* 1.3.9999.6.8.10 (sphincsshake192fsimple) */
     /* 0x2b,0xce,0x0f,0x06,0x09,0x0a  */
     SPHINCS_FAST_LEVEL5k        = 289,           /* 1.3.9999.6.9.10 (sphincsshake256fsimple) */
-    /* 0x2b,0xce,0x0f,0x06,0x07,0x0a  */
-    SPHINCS_SMALL_LEVEL1k       = 287,           /* 1.3.9999.6.7.10 */
-    /* 0x2b,0xce,0x0f,0x06,0x08,0x07  */
-    SPHINCS_SMALL_LEVEL3k       = 285,           /* 1.3.9999.6.8.7 */
-    /* 0x2b,0xce,0x0f,0x06,0x09,0x07  */
-    SPHINCS_SMALL_LEVEL5k       = 286            /* 1.3.9999.6.9.7 */
+    /* 0x2b,0xce,0x0f,0x06,0x07,0x10  new sum=293; collision hack maps sum→287 */
+    SPHINCS_SMALL_LEVEL1k       = 287,           /* 1.3.9999.6.7.16 (sphincsshake128ssimple) */
+    /* 0x2b,0xce,0x0f,0x06,0x08,0x0c  new sum=290 collides w/ FAST_L1k; collision hack maps sum→285 */
+    SPHINCS_SMALL_LEVEL3k       = 285,           /* 1.3.9999.6.8.12 (sphincsshake192ssimple) */
+    /* 0x2b,0xce,0x0f,0x06,0x09,0x0c  new sum=291; collision hack maps sum→286 */
+    SPHINCS_SMALL_LEVEL5k       = 286            /* 1.3.9999.6.9.12 (sphincsshake256ssimple) */
 #ifdef WOLFSSL_COMPOSITE_CERTS
     /* OQS composite hybrid keys.  NOTE: WOLFSSL_OLD_OID_SUM is NOT
      * compatible with WOLFSSL_COMPOSITE_CERTS (sum 276 collides with
@@ -267,12 +267,12 @@ enum Key_Sum {
     SPHINCS_FAST_LEVEL3k        = 0x06f0c423,    /* 1.3.9999.6.8.10 (sphincsshake192fsimple) */
     /* 0x2b,0xce,0x0f,0x06,0x09,0x0a  */
     SPHINCS_FAST_LEVEL5k        = 0x06f0c422,    /* 1.3.9999.6.9.10 (sphincsshake256fsimple) */
-    /* 0x2b,0xce,0x0f,0x06,0x07,0x0a  */
-    SPHINCS_SMALL_LEVEL1k       = 0x06f0c42c,    /* 1.3.9999.6.7.10 */
-    /* 0x2b,0xce,0x0f,0x06,0x08,0x07  */
-    SPHINCS_SMALL_LEVEL3k       = 0x06f0c923,    /* 1.3.9999.6.8.7 */
-    /* 0x2b,0xce,0x0f,0x06,0x09,0x07  */
-    SPHINCS_SMALL_LEVEL5k       = 0x06f0c922     /* 1.3.9999.6.9.7 */
+    /* 0x2b,0xce,0x0f,0x06,0x07,0x10  */
+    SPHINCS_SMALL_LEVEL1k       = 0x06f0de2c,    /* 1.3.9999.6.7.16 (sphincsshake128ssimple) */
+    /* 0x2b,0xce,0x0f,0x06,0x08,0x0c  */
+    SPHINCS_SMALL_LEVEL3k       = 0x06f0c223,    /* 1.3.9999.6.8.12 (sphincsshake192ssimple) */
+    /* 0x2b,0xce,0x0f,0x06,0x09,0x0c  */
+    SPHINCS_SMALL_LEVEL5k       = 0x06f0c222     /* 1.3.9999.6.9.12 (sphincsshake256ssimple) */
 #ifdef WOLFSSL_COMPOSITE_CERTS
     /* OQS composite hybrid key OIDs (new XOR-sum mode) */
     /* 0x2b,0xce,0x0f,0x07,0x05 */

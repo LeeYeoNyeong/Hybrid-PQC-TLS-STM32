@@ -176,10 +176,114 @@
 
 ## 미완료 항목 (TODO)
 
-- [ ] 전체 n=100 × 26 시나리오 최종 벤치마크 완주 (현재 실행 중)
-- [ ] `benchmark_n100_final.txt` 갱신 + `project_goals.md` 최종 표 업데이트
-- [ ] `fix/#10-falcon-hardfault` 커밋 + PR 생성 + merge
-- [ ] Vault 05-Progress-Changelog.md 업데이트
+- [x] 전체 n=100 × 26 시나리오 최종 벤치마크 완주 → 완료 (PR #11 merged, benchmark_n100_final.txt)
+- [x] `fix/#10-falcon-hardfault` 커밋 + PR 생성 + merge → 완료 (PR #11 squash-merge)
+- [x] Vault 05-Progress-Changelog.md 업데이트 → 완료 (Stage 6 추가)
+
+---
+
+## 2026-04-24 (세션 6) — 다음 세션 작업 계획 수립
+
+### [PLAN] 다음 작업: SPHINCS+ small + ML-KEM 하이브리드 KEM
+
+전체 플랜: `~/.claude/plans/zany-puzzling-sprout.md` 참조
+
+#### 핵심 결정 사항
+- **병렬 진행**: 두 작업을 별도 브랜치에서 cmux claude-teams 동시 진행
+  - Worker A: `feat/#N-sphincs-small`
+  - Worker B: `feat/#M-mlkem-hybrid-kem`
+  - 보드/UART: 1대이므로 Orchestrator가 토큰으로 직렬화
+
+#### Phase 1: SPHINCS+ small (L1/L3/L5)
+
+- **목표**: sphincsshake{128,192,256}ssimple 3개 시나리오 추가 (ports 11191/11193/11195)
+- **주요 작업**:
+  1. OQS provider `generate.yml` L1240/1326/1404 → `enable: true` + 재빌드
+  2. liboqs `OQS_ENABLE_SIG_sphincs_shake_{128,192,256}s_simple` 확인
+  3. `small_L{1,3,5}/CA/` + `Server/` 인증서 생성 (fast_L* 구조 미러링)
+  4. wolfSSL `internal.h:1787-1789` SA_MINOR → **0xC5/0xCA/0xCE** (OQS 코드포인트)
+  5. `tls_client.h` `CERT_SPHINCS_SMALL=9` enum 추가
+  6. `tls_client.c` CA PEM 3개 임베드 + `g_scenarios[]` 3행 추가
+  7. `configure_scenario_ctx():4154` 조건문에 `|| CERT_SPHINCS_SMALL` 추가
+  8. `do_handshake()` SO_RCVTIMEO: L5 → 35s ladder (`tls_client.c:4290-4294`)
+- **예상 타이밍**: L1 ≈ 1.2-1.8s / L3 ≈ 3.5-5s / L5 ≈ 9-15s
+- **주의**: small-L5 chain 크기 측정 필수 (`wc -c server_chain.pem`) — 65536B 초과 시 리프만 사용
+
+#### Phase 2: ML-KEM 하이브리드 KEM
+
+- **목표**: ECDSA L1 cert 고정 + KEM group 6종 직교 벤치마크 (ports 11201-11206)
+  - `KEM_X25519_BASELINE`, `KEM_SECP256R1_BASELINE` (classical baseline)
+  - `KEM_X25519MLKEM768`, `KEM_SECP256R1MLKEM768`, `KEM_SECP384R1MLKEM1024` (hybrid)
+  - `KEM_PURE_MLKEM768` (pure PQC)
+- **주요 작업**:
+  1. `wolfSSL.I-CUBE-wolfSSL_conf.h:118` `WOLF_CONF_KYBER 0 → 1`
+  2. `Scenario` 구조체에 `uint16_t kem_group;` 11번째 필드 추가 (`tls_client.c:4040`)
+  3. 기존 29행 말미에 `, 0` 추가 (Phase 2 워커가 Phase 1 머지 후 rebase 시 처리)
+  4. `configure_scenario_ctx()` 끝에 `UseSupportedCurve` + `UseKeyShare` 블록
+  5. KEM 시나리오 6행 추가
+  6. Mac 측 ECDSA L1 cert + per-port `-groups <name>` s_server launcher
+- **타이밍 전략**: `g_tls_t_server_hello_ms` 재활용 (KEM-only 비용 = baseline diff)
+- **ML-KEM 메모리**: `WOLFSSL_SMALL_STACK` ON이므로 heap 경로, peak ≈ 5-10KB — 문제없음
+
+#### 병렬 브랜치 머지 룰
+- 충돌 지점: `g_scenarios[]` 배열 — Phase 2가 rebase 시 Phase 1 행 끝에 `, 0` 1줄 추가 필요
+- `configure_scenario_ctx()` — git auto-merge (각자 다른 라인)
+- 머지 순서: 먼저 완성된 PR 먼저 (예상: Phase 2가 더 빠름)
+
+---
+
+## 2026-04-24 (세션 7) — SPHINCS+ small + ML-KEM 병렬 구현
+
+### [DONE] GitHub Issue 생성
+- Issue #12: feat: SPHINCS+ small
+- Issue #13: feat: ML-KEM hybrid KEM
+
+### [DONE] cmux Parallel-Workers 워크스페이스 추가
+- cmux.json: `parallel-workers` 워크스페이스 (Orchestrator + Worker A pane + Worker B pane)
+- 각 pane: 해당 worktree git log/status 8초 자동 갱신
+
+### [DONE] Phase 1: SPHINCS+ small (feat/#12-sphincs-small) — PR #14
+- OQS provider generate.yml: sphincsshake{128,192,256}ssimple enable: true → 재빌드
+- wolfSSL internal.h: SPHINCS_SMALL SA_MINOR 0x6C/6E/70 → **0xC5/CA/CE** (OQS 공식 codepoint)
+- wolfSSL internal.c: AddSuiteHashSigAlgo small L1/L3/L5 추가 (기존 fast만 있었음)
+- tls_client.h: CERT_SPHINCS_SMALL = 9 enum 추가
+- tls_client.c: CA PEM 3개 임베드 + g_scenarios[] 3행 + 분기 확장 + SO_RCVTIMEO 35s ladder
+- 인증서: small_L{1,3,5}/CA/Server 생성 완료 (L1=22KB, L3=44KB, L5=81KB chain)
+- 서버 기동: ports 11191(PID=25892), 11193(PID=25894), 11195(PID=25895)
+- 빌드: ✅ Flash=55.9%, SRAM=98.7% (BSS의 93%가 heap2 정적 배열, 링커 통과)
+- 커밋: 6533f67 (wolfssl fix) + 3ca4359 (시나리오) + 12d786f (cmux)
+- PR #14: https://github.com/LeeYeoNyeong/Hybrid-PQC-TLS-STM32/pull/14
+
+### [DONE] Phase 2: ML-KEM hybrid KEM (feat/#13-mlkem-hybrid-kem) — PR #15
+- wolfSSL_conf.h: WOLF_CONF_KYBER 0→1
+- Scenario 구조체: uint16_t kem_group 필드 추가 (12번째)
+- g_scenarios[] 기존 32행 전체 `, 0` 추가 + KEM 6행 추가 (ports 11201-11206)
+- wolfSSL 상수: WOLFSSL_X25519MLKEM768(4588), SECP256R1MLKEM768(4587), SECP384R1MLKEM1024(4589), ML_KEM_768(513)
+- configure_scenario_ctx(): kem_group 처리 블록 추가 (wolfSSL_UseKeyShare + UseSupportedCurve)
+- Mac launcher: ~/Desktop/develop/pqc_tls_server/launch_kem_servers.sh
+- Rebase: feat/#12-sphincs-small 위에 스택, g_scenarios 충돌 수동 해결
+- 빌드: ✅ (Worker B 검증, SRAM +1.5KB BSS, 링커 통과)
+- PR #15: https://github.com/LeeYeoNyeong/Hybrid-PQC-TLS-STM32/pull/15 (stacked on PR #14)
+
+### [DONE] 다음 세션 플랜 수립
+- 플랜 파일: `~/.claude/plans/fuzzy-whistling-beacon.md`
+- Phase 1: PR #14 (feat/#12-sphincs-small) — Flash → UART n=100 → 검증 → squash-merge
+- Phase 2: PR #15 (feat/#13-mlkem-hybrid-kem) — rebase onto main → KEM launcher → Flash → UART → merge
+- Phase 3: 벤치마크 그래프 재생성 (35 시나리오), Obsidian vault 동기화
+
+### [DONE] SPHINCS_SMALL n=100 벤치마크 완료 + wolfSSL 픽스 커밋 (2026-04-24)
+- **커밋**: `badc751` (feat/#12-sphincs-small, pushed)
+- SMALL_L1: n=100, errors=0, mean=1623.8ms, stddev=47.0ms, 95CI=[1614.6,1633.0]
+- SMALL_L3: n=100, errors=0, mean=2850.3ms, stddev=64.6ms, 95CI=[2837.6,2863.0]
+- SMALL_L5: **OOM** — wolfSSL GrowInputBuffer 65536B 필요, 힙 여유 62960B (STM32F439ZI 194KB Heap_5 한계)
+- wolfSSL 픽스: sphincs.c keypair 4-byte BE, internal.c SA_MINOR, asn.c OID, oid_sum.h
+
+### [TODO] 다음 세션: PR #14 merge → Phase 2 ML-KEM
+- [ ] `gh auth login` 후 `gh pr merge 14 --squash --delete-branch` (feat/#12-sphincs-small)
+- [ ] Phase 2: `git rebase origin/main` (feat/#13) → KEM launcher(ports 11201-11206) → flash → UART n=100
+  - 기대: KEM baseline≈350ms / hybrid+10-40ms, errors=0
+  - 검증 후 `gh pr merge 15 --squash`
+- [ ] Phase 3: benchmark_graphs_YYYYMMDD/ 재생성 (35 시나리오), vault sync
 
 ---
 

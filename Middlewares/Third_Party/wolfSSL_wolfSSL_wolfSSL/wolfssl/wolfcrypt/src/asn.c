@@ -4404,17 +4404,17 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte sigSphincsFast_Level5Oid[] =
         {43, 206, 15, 6, 9, 10};
 
-    /* Sphincs Small Level 1: 1 3 9999 6 7 10 */
+    /* Sphincs Small Level 1: 1.3.9999.6.7.16 (oqs-provider sphincsshake128ssimple) */
     static const byte sigSphincsSmall_Level1Oid[] =
-        {43, 206, 15, 6, 7, 10};
+        {43, 206, 15, 6, 7, 16};
 
-    /* Sphincs Small Level 3: 1 3 9999 6 8 7 */
+    /* Sphincs Small Level 3: 1.3.9999.6.8.12 (oqs-provider sphincsshake192ssimple) */
     static const byte sigSphincsSmall_Level3Oid[] =
-        {43, 206, 15, 6, 8, 7};
+        {43, 206, 15, 6, 8, 12};
 
-    /* Sphincs Small Level 5: 1 3 9999 6 9 7 */
+    /* Sphincs Small Level 5: 1.3.9999.6.9.12 (oqs-provider sphincsshake256ssimple) */
     static const byte sigSphincsSmall_Level5Oid[] =
-        {43, 206, 15, 6, 9, 7};
+        {43, 206, 15, 6, 9, 12};
 #endif /* HAVE_SPHINCS */
 
 /* keyType */
@@ -4500,17 +4500,17 @@ static word32 SetBitString16Bit(word16 val, byte* output)
     static const byte keySphincsFast_Level5Oid[] =
         {43, 206, 15, 6, 9, 10};
 
-    /* Sphincs Small Level 1: 1 3 9999 6 7 10 */
+    /* Sphincs Small Level 1: 1.3.9999.6.7.16 (oqs-provider sphincsshake128ssimple) */
     static const byte keySphincsSmall_Level1Oid[] =
-        {43, 206, 15, 6, 7, 10};
+        {43, 206, 15, 6, 7, 16};
 
-    /* Sphincs Small Level 3: 1 3 9999 6 8 7 */
+    /* Sphincs Small Level 3: 1.3.9999.6.8.12 (oqs-provider sphincsshake192ssimple) */
     static const byte keySphincsSmall_Level3Oid[] =
-        {43, 206, 15, 6, 8, 7};
+        {43, 206, 15, 6, 8, 12};
 
-    /* Sphincs Small Level 5: 1 3 9999 6 9 7 */
+    /* Sphincs Small Level 5: 1.3.9999.6.9.12 (oqs-provider sphincsshake256ssimple) */
     static const byte keySphincsSmall_Level5Oid[] =
-        {43, 206, 15, 6, 9, 7};
+        {43, 206, 15, 6, 9, 12};
 #endif /* HAVE_SPHINCS */
 
 /* curveType */
@@ -7082,10 +7082,25 @@ static int GetOID(const byte* input, word32* inOutIdx, word32* oid,
      *
      * These hacks will hopefully disappear when new standardized OIDs appear.
      */
-    if (idx + (word32)sizeof(sigSphincsFast_Level3Oid) < (word32)length &&
+    if (idx + (word32)sizeof(sigSphincsFast_Level3Oid) <= (word32)length &&
             XMEMCMP(&input[idx], sigSphincsFast_Level3Oid,
                sizeof(sigSphincsFast_Level3Oid)) == 0) {
         found_collision = SPHINCS_FAST_LEVEL3k;
+    }
+    else if (idx + (word32)sizeof(sigSphincsSmall_Level1Oid) <= (word32)length &&
+            XMEMCMP(&input[idx], sigSphincsSmall_Level1Oid,
+               sizeof(sigSphincsSmall_Level1Oid)) == 0) {
+        found_collision = SPHINCS_SMALL_LEVEL1k;
+    }
+    else if (idx + (word32)sizeof(sigSphincsSmall_Level3Oid) <= (word32)length &&
+            XMEMCMP(&input[idx], sigSphincsSmall_Level3Oid,
+               sizeof(sigSphincsSmall_Level3Oid)) == 0) {
+        found_collision = SPHINCS_SMALL_LEVEL3k;
+    }
+    else if (idx + (word32)sizeof(sigSphincsSmall_Level5Oid) <= (word32)length &&
+            XMEMCMP(&input[idx], sigSphincsSmall_Level5Oid,
+               sizeof(sigSphincsSmall_Level5Oid)) == 0) {
+        found_collision = SPHINCS_SMALL_LEVEL5k;
     }
 #endif /* HAVE_SPHINCS */
 #endif
