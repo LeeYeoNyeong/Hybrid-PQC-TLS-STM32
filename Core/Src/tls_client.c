@@ -29,6 +29,10 @@
 
 #include <time.h>
 
+/* ── Atomic UART output: bypass newlib stdio to prevent task interleaving ── */
+extern int uart_printf(const char *fmt, ...);
+#define printf uart_printf
+
 /* ── extern from lwip.c ── */
 extern struct netif gnetif;
 
@@ -5268,8 +5272,7 @@ static const Scenario g_scenarios[] = {
     MR1("FALCON_L1",  CERT_FALCON,  CA_FALCON_L1,  sizeof(CA_FALCON_L1)-1,  NULL,0,HYBCERT_NONE,     0,0,11171),
     MR5("FALCON_L5",  CERT_FALCON,  CA_FALCON_L5,  sizeof(CA_FALCON_L5)-1,  NULL,0,HYBCERT_NONE,     0,0,11175),
     MR1("SPHINCS_FAST_L1", CERT_SPHINCS_FAST,CA_SPHINCS_FAST_L1,sizeof(CA_SPHINCS_FAST_L1)-1,NULL,0,HYBCERT_NONE,0,0,11181),
-    MR3("SPHINCS_FAST_L3", CERT_SPHINCS_FAST,CA_SPHINCS_FAST_L3,sizeof(CA_SPHINCS_FAST_L3)-1,NULL,0,HYBCERT_NONE,0,0,11183),
-    MR5("SPHINCS_FAST_L5", CERT_SPHINCS_FAST,CA_SPHINCS_FAST_L5,sizeof(CA_SPHINCS_FAST_L5)-1,NULL,0,HYBCERT_NONE,0,0,11185),
+    /* SPHINCS_FAST L3/L5 removed: pvPortMalloc(~140KB) fails on 192KB SRAM — hardware limit */
     MR1("SPHINCS_SMALL_L1",CERT_SPHINCS_SMALL,CA_SPHINCS_SMALL_L1,sizeof(CA_SPHINCS_SMALL_L1)-1,NULL,0,HYBCERT_NONE,0,0,11191),
     MR3("SPHINCS_SMALL_L3",CERT_SPHINCS_SMALL,CA_SPHINCS_SMALL_L3,sizeof(CA_SPHINCS_SMALL_L3)-1,NULL,0,HYBCERT_NONE,0,0,11193),
 };
@@ -5524,7 +5527,7 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
         printf("[TLS] TCP connect failed errno=%d\n", errno);
         close(fd); return 0;
     }
-    printf("[TLS] TCP OK, starting TLS (t=%lu)\n", (unsigned long)HAL_GetTick());
+    /* TCP OK — print removed to minimize UART garbling during benchmark */
 
     /* SO_RCVTIMEO: hard cap on blocking recv inside wolfSSL_connect.
      * LWIP_SO_RCVTIMEO=1 in lwipopts.h makes this effective.
@@ -5560,26 +5563,10 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
 
     uint32_t elapsed = 0;
     if (ret == WOLFSSL_SUCCESS) {
-#if BENCH_MODE_MATRIX
-        if (sc->kem_group != 0 && hs_count <= 3) {
-            const char *neg = wolfSSL_get_curve_name(ssl);
-            printf("  [KEM] %s: group=%u negotiated=%s\n",
-                   sc->name, (unsigned)sc->kem_group, neg ? neg : "NULL");
-        }
-#endif
         if (!validate_peer_policy(ssl, sc)) {
             printf("[TLS] peer policy validation failed for %s\n", sc->name);
         } else {
             elapsed = t_end - t_start;
-            if (hs_count <= 3) {
-                printf("  #%d OK %lu ms (SH=%lu C=%lu CV=%lu PQ=%lu F=%lu)\n",
-                       hs_count, (unsigned long)elapsed,
-                       (unsigned long)g_tls_t_server_hello_ms,
-                       (unsigned long)g_tls_t_cert_ms,
-                       (unsigned long)g_tls_t_cert_verify_ms,
-                       (unsigned long)g_tls_t_pq_cert_verify_ms,
-                       (unsigned long)g_tls_t_finished_ms);
-            }
         }
     } else {
         int err = wolfSSL_get_error(ssl, ret);
@@ -5627,9 +5614,7 @@ static void run_scenario(const Scenario *sc)
         osDelay(500); /* short settle */
     }
 
-    printf("[TLS] Heap free=%lu min_ever=%lu\n",
-           (unsigned long)xPortGetFreeHeapSize(),
-           (unsigned long)xPortGetMinimumEverFreeHeapSize());
+    /* Heap print removed — reduces UART traffic and garbling */
 
     WOLFSSL_CTX *ctx = wolfSSL_CTX_new(wolfTLSv1_3_client_method());
     if (!ctx) { printf("[TLS] CTX alloc failed\n"); return; }
@@ -5672,7 +5657,6 @@ static void run_scenario(const Scenario *sc)
            TLS_REPEAT_COUNT, sc->port ? sc->port : TLS_SERVER_PORT);
 
     for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
-        printf("[TLS] [%d/%d] %s\n", i + 1, TLS_REPEAT_COUNT, sc->name);
         uint32_t ms = do_handshake(ctx, sc);
         samples[i] = ms;
         if (ms > 0) {
@@ -5689,7 +5673,7 @@ static void run_scenario(const Scenario *sc)
             errors++;
             if (errors >= 3) break;
         }
-        printf("[TLS] [%d/%d] %s → %s (%lu ms)\n",
+        printf("[TLS] [%d/%d] %s -> %s (%lu ms)\n",
                i + 1, TLS_REPEAT_COUNT, sc->name,
                ms > 0 ? "OK" : "ERR", (unsigned long)ms);
         osDelay(200);

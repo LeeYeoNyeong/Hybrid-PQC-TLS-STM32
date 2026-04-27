@@ -278,12 +278,26 @@
 - SMALL_L5: **OOM** — wolfSSL GrowInputBuffer 65536B 필요, 힙 여유 62960B (STM32F439ZI 194KB Heap_5 한계)
 - wolfSSL 픽스: sphincs.c keypair 4-byte BE, internal.c SA_MINOR, asn.c OID, oid_sum.h
 
-### [TODO] 다음 세션: PR #14 merge → Phase 2 ML-KEM
-- [ ] `gh auth login` 후 `gh pr merge 14 --squash --delete-branch` (feat/#12-sphincs-small)
-- [ ] Phase 2: `git rebase origin/main` (feat/#13) → KEM launcher(ports 11201-11206) → flash → UART n=100
-  - 기대: KEM baseline≈350ms / hybrid+10-40ms, errors=0
-  - 검증 후 `gh pr merge 15 --squash`
-- [ ] Phase 3: benchmark_graphs_YYYYMMDD/ 재생성 (35 시나리오), vault sync
+### [DONE] ML-KEM 하이브리드 KEM n=100 벤치마크 완료 (2026-04-25)
+- **브랜치**: feat/#13-mlkem-hybrid-kem → PR #16
+- **커밋**: `87870dd` (WOLF_CONF_EDCURVE25519=1 + 6 KEM 결과 추가)
+- **핵심 수정**: WOLF_CONF_EDCURVE25519 0→1 → HAVE_CURVE25519 활성화
+  - 이전 실패: X25519_BASELINE err=-174, X25519MLKEM768 err=-173
+  - 원인: wolfSSL Curve25519가 WOLFSSL_SP_ARM_CORTEX_M_ASM 미지원 → non-SP C 폴백
+- **결과** (n=100, errors=0 전 시나리오):
+  - KEM_X25519_BASELINE:     1415.2ms (⚠ non-SP Curve25519, P-256 대비 ~9배)
+  - KEM_SECP256R1_BASELINE:   154.6ms
+  - KEM_X25519MLKEM768:      1471.1ms (⚠ non-SP Curve25519)
+  - KEM_SECP256R1MLKEM768:    210.8ms (SrvHello=47.8ms — ML-KEM 처리 포함)
+  - KEM_SECP384R1MLKEM1024:   320.6ms
+  - KEM_PURE_MLKEM768:        195.3ms (SrvHello=13.9ms — 가장 빠른 하이브리드)
+- UART 로그: uart_kem_fix_1022.log (1599줄, BENCHMARK COMPLETE 확인)
+- PR #16: https://github.com/LeeYeoNyeong/Hybrid-PQC-TLS-STM32/pull/16
+
+### [TODO] 다음 세션: PR #16 merge → Phase 3
+- [ ] `gh pr merge 16 --squash --delete-branch` (feat/#13-mlkem-hybrid-kem)
+- [ ] Phase 3: benchmark_graphs_YYYYMMDD/ 재생성 (31 시나리오 완료 + 6 KEM = 37 시나리오), vault sync
+- [ ] (선택) Curve25519 SP 최적화 조사: WOLFSSL_SP_MATH_ALL 또는 별도 sp_curve25519.c ASM 활성화 검토
 
 ---
 
@@ -299,3 +313,100 @@ kill <old_pid>; OPENSSL_MODULES=~/Desktop/develop/oqs-provider/_build/lib \
   -key  ~/Desktop/develop/tls_test/sphincs/fast_L1/Server/server_key.pem \
   -tls1_3 -www -provider oqsprovider -provider default &
 ```
+
+---
+
+## 2026-04-27 (세션 — Cert × KEM 매트릭스)
+
+### [DONE] Cert × KEM Matrix Benchmark (78 시나리오) — feat/#19-cert-kem-matrix
+
+**플랜**: `~/.claude/plans/soft-drifting-parasol.md`
+**Issue**: #19 / 브랜치: `feat/#19-cert-kem-matrix`
+**커밋**: `0e810b5` — BENCH_MODE_MATRIX 구현
+
+#### 완료 사항
+- PR #16 (feat/#13-mlkem-hybrid-kem), PR #18 (feat/#17-kem-l1-l5-complete) → main merge 완료
+- GitHub Issue #19 생성 → 브랜치 `feat/#19-cert-kem-matrix` 체크아웃
+- `generate_pqc_chains.sh` 작성 → Falcon/SPHINCS+ 3-level (RootCA→ICA→Server) 체인 생성
+  - falcon/L1 (falcon512), falcon/L5 (falcon1024)
+  - sphincs/fast_{L1,L3,L5}, sphincs/small_{L1,L3}
+- `server_chain.pem` 순서 수정: ICA→Server → Server→ICA (OpenSSL s_server 요구사항)
+- `launch_matrix_servers.sh` 작성 (28 cert 포트 × 3 KEM groups)
+- `tls_client.c`:
+  - CA_FALCON_L1/L5, CA_SPHINCS_FAST/SMALL L1/L3/L5 PEM 교체 (3-level RootCA)
+  - `#if BENCH_MODE_MATRIX` 블록: MR1/MR3/MR5 매크로 + 84 시나리오 배열
+  - `wolfSSL_get_curve_name` KEM 협상 로그 (첫 3회 핸드셰이크)
+  - `#else` 기존 cert+KEM axis 배열, `#endif` 닫힘
+- `CMakeLists.txt`: `option(BENCH_MODE_MATRIX ...)` + 제너레이터 표현식 정의
+- 빌드: `cmake --preset Debug -DBENCH_MODE_MATRIX=ON && cmake --build` → ✅ ELF 5.7MB
+- 서버: `launch_matrix_servers.sh start` → **28 OK, 0 WARN**
+- 플래시: STM32F439ZI 플래시 완료, UART 캡처 시작
+
+#### 현재 진행 중
+- **전체 84시나리오 단일 런** (uart_matrix_v9_1526.log, PID=69317)
+- wolfSSL 서버 재빌드 이슈 해결:
+  - 문제: wolfSSL-pqc 기존 빌드에 `--enable-curve25519`, `--enable-kyber` 누락
+  - 수정: `~/Desktop/develop/wolfssl-5.8.4-stable` 재configure+rebuild → `~/wolfssl-pqc` 재설치
+  - 검증: options.h에 `HAVE_CURVE25519`, `WOLFSSL_HAVE_MLKEM` 확인
+  - 서버 재빌드: `make -B server` (15:16 타임스탬프)
+  - 서버 재시작: 28/28 OK (15:26 기준)
+- **ECDSA_L1_P256** → OK ~332ms ✅
+- **ECDSA_L1_X25519** → OK ~1416ms ✅ (non-SP X25519 keygen ~1273ms, 기존 KEM benchmark와 일치)
+- ECDSA_L1_MLKEM512 ~ SPHINCS_SMALL_L3 순서로 진행 중
+
+#### 결과 (2026-04-27 18:25 ALL DONE 확인)
+
+파싱 결과: `benchmark_matrix_n100_20260427.txt`
+
+**75/84 시나리오 성공 (errors=0)**: ECDSA, ML-DSA, Related, Catalyst, Chameleon, Dual, Composite × L1/L3/L5 × 3KEM + FALCON × L1/L5 × 3KEM + SPHINCS_FAST_L1 × 3KEM
+
+**9/84 시나리오 실패 — SPHINCS_FAST L3/L5 (하드웨어 한계)**:
+- 원인: wolfSSL 내부 SPHINCS_FAST L3/L5 검증 시 `pvPortMalloc(~140KB)` 시도
+- 192KB SRAM 기기에서 연속 블록 할당 불가 → `[PANIC]` 후 ERR
+- L1(shake128f ~17KB 서명)은 성공, L3(shake192f ~35KB)/L5(shake256f ~49KB)는 실패
+
+**6/84 시나리오 garbled — SPHINCS_SMALL L1/L3**:
+- errors=0 (핸드셰이크 성공), 타이밍 라인 100% garbled → 파싱 불가
+- heap 모니터링 printf가 scenario OK 라인과 interleave
+
+**파싱 n=4~17 이슈**: 실제 100회 실행됐으나 UART garbling으로 clean 라인만 캡처됨.
+mean stddev가 매우 작아(0.3~2.2ms) 신뢰 가능.
+
+주요 결과 요약 (mean ms):
+| 시나리오 | P256/P384 | X25519/HYB | MLKEM |
+|---|---|---|---|
+| ECDSA L1 | 332 | 1416 | 332 |
+| ECDSA L3 | 584 | 554(HYB768) | 573 |
+| ECDSA L5 | 592 | 673(HYB1024) | 579 |
+| ML-DSA L1 | 446 | 1705 | 468 |
+| ML-DSA L3 | 638 | 695 | 680 |
+| ML-DSA L5 | 1032 | 1115 | 1023 |
+| FALCON L1 | 178 | 1438 | 200 |
+| FALCON L5 | 304 | 388 | 295 |
+| SPHINCS_FAST L1 | 3824 | 5008 | 3803 |
+| SPHINCS_FAST L3~L5 | ❌ pvPortMalloc | ❌ | ❌ |
+| SPHINCS_SMALL L1/L3 | ✅(garbled) | ✅(garbled) | ✅(garbled) |
+
+#### 최종 결과 (v16 / uart_matrix_v16_1951.log)
+- **77/78 시나리오 n=100 완료** (errors=0)
+- **1개 스킵**: CHAMELEON_L5_HYB1024 — pvPortMalloc MEMORY_E(-155), ML-DSA87 delta cert 검증 힙 부족(free≈17KB)
+- SPHINCS_FAST L3/L5 제거 (코드에서 삭제, 하드웨어 한계 주석 기재)
+- 결과 파일: `benchmark_matrix_n100_20260427.txt`
+
+---
+
+## 2026-04-28 (세션 — v16 완료 + 코드 수정)
+
+### [DONE] UART 가블링 근본 해결 — pyserial raw mode
+- **태그**: `#fix` `#uart`
+- 원인: macOS `cat /dev/cu.*` tty canonical mode가 `\r` 바이트 처리하며 라인 버퍼링 → 바이트 순서 뒤집힘
+- 해결: `uart_capture.py` (pyserial raw mode, O_NOCTTY) → 완벽한 clean 출력 확인
+- DTR reset 방지: `ser.dtr = False; ser.rts = False`
+
+### [DONE] uart_printf 코드 리뷰 수정 (critic + code-reviewer 병렬 리뷰)
+- **태그**: `#fix` `#code-review`
+- 수정 1: `vsnprintf(buf, sizeof(buf)-1, ...)` → `sizeof(buf)` (off-by-one)
+- 수정 2: `xPortIsInsideInterrupt()` 가드 추가 — ISR에서 `taskENTER_CRITICAL()` 호출 방지
+- 수정 3: `uart_printf()` 스케줄러 상태 체크 `== RUNNING` → `!= NOT_STARTED` (SUSPENDED 상태 포함)
+- 빌드: ✅ (SRAM 99.53%, Flash 51.16%)
+- 후속 이슈 (PR 분리): critical section → `vTaskSuspendAll()` 전환 (ETH IRQ 보존)

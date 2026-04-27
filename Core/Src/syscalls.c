@@ -29,7 +29,39 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/times.h>
+#include <stdarg.h>
+#include "FreeRTOS.h"
+#include "task.h"
 
+/* ── Atomic UART printf ──────────────────────────────────────────────────────
+ * newlib printf splits one format string into multiple _write() calls.
+ * Between calls the scheduler can preempt, causing interleaved output.
+ * uart_printf() formats into a local stack buffer (per-task, no sharing)
+ * and transmits the entire line atomically, bypassing stdio.
+ * Not safe to call from ISR context (polling UART inside critical section).
+ * Use: #define printf uart_printf in any file that prints during the benchmark.
+ */
+extern int __io_putchar(int ch);
+
+int uart_printf(const char *fmt, ...)
+{
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    if (len < 0) return len;
+    if (len >= (int)sizeof(buf)) len = sizeof(buf) - 1;
+
+    /* Skip critical section in ISR context — taskENTER_CRITICAL() from ISR
+     * corrupts the task critical-nesting counter on Cortex-M FreeRTOS. */
+    BaseType_t in_isr = xPortIsInsideInterrupt();
+    BaseType_t sched  = xTaskGetSchedulerState();
+    if (!in_isr && sched != taskSCHEDULER_NOT_STARTED) taskENTER_CRITICAL();
+    for (int i = 0; i < len; i++) __io_putchar(buf[i]);
+    if (!in_isr && sched != taskSCHEDULER_NOT_STARTED) taskEXIT_CRITICAL();
+    return len;
+}
 
 /* Variables */
 extern int __io_putchar(int ch) __attribute__((weak));
@@ -82,9 +114,21 @@ __attribute__((weak)) int _write(int file, char *ptr, int len)
   (void)file;
   int DataIdx;
 
+  /* Serialise output between tasks; skip in ISR context (HardFault etc.)
+   * where taskENTER_CRITICAL() from an exception would corrupt nesting count. */
+  BaseType_t in_isr = xPortIsInsideInterrupt();
+  BaseType_t sched  = xTaskGetSchedulerState();
+  if (!in_isr && sched != taskSCHEDULER_NOT_STARTED) {
+    taskENTER_CRITICAL();
+  }
+
   for (DataIdx = 0; DataIdx < len; DataIdx++)
   {
     __io_putchar(*ptr++);
+  }
+
+  if (!in_isr && sched != taskSCHEDULER_NOT_STARTED) {
+    taskEXIT_CRITICAL();
   }
   return len;
 }
