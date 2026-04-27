@@ -5192,6 +5192,7 @@ typedef struct {
     uint8_t       cks_sig_spec;      /* 0 or WOLFSSL_CKS_SIGSPEC_* */
     uint8_t       require_related;   /* post-handshake RelatedCertificate check */
     uint16_t      port;          /* 0 = use TLS_SERVER_PORT default */
+    uint16_t      kem_group;     /* 0 = wolfSSL default; non-zero = NamedGroup ID */
 } Scenario;
 
 #define RELATED_CERT_OID "1.3.6.1.5.5.7.1.36"
@@ -5214,54 +5215,62 @@ static int is_scenario_skipped(const char *name)
 
 static const Scenario g_scenarios[] = {
     /* ECDSA: ports 11101/11103/11105 */
-    { "ECDSA_L1",   CERT_ECDSA,    SEC_LEVEL_1, CA_ECDSA_L1,    sizeof(CA_ECDSA_L1)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11101 },
-    { "ECDSA_L3",   CERT_ECDSA,    SEC_LEVEL_3, CA_ECDSA_L3,    sizeof(CA_ECDSA_L3)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11103 },
-    { "ECDSA_L5",   CERT_ECDSA,    SEC_LEVEL_5, CA_ECDSA_L5,    sizeof(CA_ECDSA_L5)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11105 },
+    { "ECDSA_L1",   CERT_ECDSA,    SEC_LEVEL_1, CA_ECDSA_L1,    sizeof(CA_ECDSA_L1)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11101, 0 },
+    { "ECDSA_L3",   CERT_ECDSA,    SEC_LEVEL_3, CA_ECDSA_L3,    sizeof(CA_ECDSA_L3)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11103, 0 },
+    { "ECDSA_L5",   CERT_ECDSA,    SEC_LEVEL_5, CA_ECDSA_L5,    sizeof(CA_ECDSA_L5)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11105, 0 },
     /* ML-DSA (pure PQC): ports 11111/11113/11115 */
-    { "MLDSA_L1",   CERT_MLDSA,    SEC_LEVEL_1, CA_MLDSA_L1,    sizeof(CA_MLDSA_L1)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11111 },
-    { "MLDSA_L3",   CERT_MLDSA,    SEC_LEVEL_3, CA_MLDSA_L3,    sizeof(CA_MLDSA_L3)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11113 },
-    { "MLDSA_L5",   CERT_MLDSA,    SEC_LEVEL_5, CA_MLDSA_L5,    sizeof(CA_MLDSA_L5)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11115 },
+    { "MLDSA_L1",   CERT_MLDSA,    SEC_LEVEL_1, CA_MLDSA_L1,    sizeof(CA_MLDSA_L1)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11111, 0 },
+    { "MLDSA_L3",   CERT_MLDSA,    SEC_LEVEL_3, CA_MLDSA_L3,    sizeof(CA_MLDSA_L3)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11113, 0 },
+    { "MLDSA_L5",   CERT_MLDSA,    SEC_LEVEL_5, CA_MLDSA_L5,    sizeof(CA_MLDSA_L5)    - 1, NULL, 0, HYBCERT_NONE,      0,                        0, 11115, 0 },
     /* Related: ports 11141/11143/11145
      * Server sends ML-DSA chain which carries RelatedCertificate extension (OID 1.3.6.1.5.5.7.1.36)
      * binding it to the corresponding ECDSA cert. Client verifies ML-DSA chain + checks extension. */
     /* RELATED: ECDSA chain (primary) + ML-DSA chain (PQ, has RelatedCertificate ext)
      * Both chains sent in one Certificate message with 0x000000 delimiter.
      * Both CAs loaded so wolfSSL can verify both ECDSA and PQ chain. */
-    { "RELATED_L1", CERT_RELATED, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, CA_MLDSA_L1, sizeof(CA_MLDSA_L1) - 1, HYBCERT_NONE, 0, 1, 11141 },
-    { "RELATED_L3", CERT_RELATED, SEC_LEVEL_3, CA_ECDSA_L3, sizeof(CA_ECDSA_L3) - 1, CA_MLDSA_L3, sizeof(CA_MLDSA_L3) - 1, HYBCERT_NONE, 0, 1, 11143 },
-    { "RELATED_L5", CERT_RELATED, SEC_LEVEL_5, CA_ECDSA_L5, sizeof(CA_ECDSA_L5) - 1, CA_MLDSA_L5, sizeof(CA_MLDSA_L5) - 1, HYBCERT_NONE, 0, 1, 11145 },
+    { "RELATED_L1", CERT_RELATED, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, CA_MLDSA_L1, sizeof(CA_MLDSA_L1) - 1, HYBCERT_NONE, 0, 1, 11141, 0 },
+    { "RELATED_L3", CERT_RELATED, SEC_LEVEL_3, CA_ECDSA_L3, sizeof(CA_ECDSA_L3) - 1, CA_MLDSA_L3, sizeof(CA_MLDSA_L3) - 1, HYBCERT_NONE, 0, 1, 11143, 0 },
+    { "RELATED_L5", CERT_RELATED, SEC_LEVEL_5, CA_ECDSA_L5, sizeof(CA_ECDSA_L5) - 1, CA_MLDSA_L5, sizeof(CA_MLDSA_L5) - 1, HYBCERT_NONE, 0, 1, 11145, 0 },
     /* Catalyst: ports 11121/11123/11125  (EC cert + ML-DSA altkey → PQCertVerify) */
-    { "CATALYST_L1",  CERT_CATALYST,  SEC_LEVEL_1, CA_CATALYST_L1,  sizeof(CA_CATALYST_L1)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11121 },
-    { "CATALYST_L3",  CERT_CATALYST,  SEC_LEVEL_3, CA_CATALYST_L3,  sizeof(CA_CATALYST_L3)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11123 },
-    { "CATALYST_L5",  CERT_CATALYST,  SEC_LEVEL_5, CA_CATALYST_L5,  sizeof(CA_CATALYST_L5)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11125 },
+    { "CATALYST_L1",  CERT_CATALYST,  SEC_LEVEL_1, CA_CATALYST_L1,  sizeof(CA_CATALYST_L1)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11121, 0 },
+    { "CATALYST_L3",  CERT_CATALYST,  SEC_LEVEL_3, CA_CATALYST_L3,  sizeof(CA_CATALYST_L3)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11123, 0 },
+    { "CATALYST_L5",  CERT_CATALYST,  SEC_LEVEL_5, CA_CATALYST_L5,  sizeof(CA_CATALYST_L5)  - 1, NULL, 0, HYBCERT_CATALYST,  0, 0, 11125, 0 },
     /* Chameleon: ports 11131/11133/11135 (DCD hybrid cert; both chain paths verified) */
-    { "CHAMELEON_L1", CERT_CHAMELEON, SEC_LEVEL_1, CA_CHAMELEON_L1, sizeof(CA_CHAMELEON_L1) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11131 },
-    { "CHAMELEON_L3", CERT_CHAMELEON, SEC_LEVEL_3, CA_CHAMELEON_L3, sizeof(CA_CHAMELEON_L3) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11133 },
-    { "CHAMELEON_L5", CERT_CHAMELEON, SEC_LEVEL_5, CA_CHAMELEON_L5, sizeof(CA_CHAMELEON_L5) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11135 },
+    { "CHAMELEON_L1", CERT_CHAMELEON, SEC_LEVEL_1, CA_CHAMELEON_L1, sizeof(CA_CHAMELEON_L1) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11131, 0 },
+    { "CHAMELEON_L3", CERT_CHAMELEON, SEC_LEVEL_3, CA_CHAMELEON_L3, sizeof(CA_CHAMELEON_L3) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11133, 0 },
+    { "CHAMELEON_L5", CERT_CHAMELEON, SEC_LEVEL_5, CA_CHAMELEON_L5, sizeof(CA_CHAMELEON_L5) - 1, NULL, 0, HYBCERT_CHAMELEON, 0, 0, 11135, 0 },
     /* Dual: ports 11151/11153/11155
      * Uses catalyst-style cert (ECDSA primary + ML-DSA SubjectAltPublicKeyInfo + ML-DSA altkey).
      * Server sends both CertVerify (ECDSA) and PQCertVerify (ML-DSA). Client verifies both. */
     /* DUAL: ECDSA chain (primary, CertVerify) + ML-DSA chain (PQCertVerify).
      * Both chains sent in one Certificate message with 0x000000 delimiter.
      * No SAPKI extension — ML-DSA pubkey comes from PQ chain leaf cert. */
-    { "DUAL_L1",    CERT_DUAL,    SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, CA_MLDSA_L1, sizeof(CA_MLDSA_L1) - 1, HYBCERT_NONE, 0, 0, 11151 },
-    { "DUAL_L3",    CERT_DUAL,    SEC_LEVEL_3, CA_ECDSA_L3, sizeof(CA_ECDSA_L3) - 1, CA_MLDSA_L3, sizeof(CA_MLDSA_L3) - 1, HYBCERT_NONE, 0, 0, 11153 },
-    { "DUAL_L5",    CERT_DUAL,    SEC_LEVEL_5, CA_ECDSA_L5, sizeof(CA_ECDSA_L5) - 1, CA_MLDSA_L5, sizeof(CA_MLDSA_L5) - 1, HYBCERT_NONE, 0, 0, 11155 },
+    { "DUAL_L1",    CERT_DUAL,    SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, CA_MLDSA_L1, sizeof(CA_MLDSA_L1) - 1, HYBCERT_NONE, 0, 0, 11151, 0 },
+    { "DUAL_L3",    CERT_DUAL,    SEC_LEVEL_3, CA_ECDSA_L3, sizeof(CA_ECDSA_L3) - 1, CA_MLDSA_L3, sizeof(CA_MLDSA_L3) - 1, HYBCERT_NONE, 0, 0, 11153, 0 },
+    { "DUAL_L5",    CERT_DUAL,    SEC_LEVEL_5, CA_ECDSA_L5, sizeof(CA_ECDSA_L5) - 1, CA_MLDSA_L5, sizeof(CA_MLDSA_L5) - 1, HYBCERT_NONE, 0, 0, 11155, 0 },
     /* Composite: wolfSSL server ports 11161/11163/11165 */
-    { "COMPOSITE_L1", CERT_COMPOSITE, SEC_LEVEL_1, CA_COMPOSITE_L1, sizeof(CA_COMPOSITE_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11161 },
-    { "COMPOSITE_L3", CERT_COMPOSITE, SEC_LEVEL_3, CA_COMPOSITE_L3, sizeof(CA_COMPOSITE_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11163 },
-    { "COMPOSITE_L5", CERT_COMPOSITE, SEC_LEVEL_5, CA_COMPOSITE_L5, sizeof(CA_COMPOSITE_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11165 },
+    { "COMPOSITE_L1", CERT_COMPOSITE, SEC_LEVEL_1, CA_COMPOSITE_L1, sizeof(CA_COMPOSITE_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11161, 0 },
+    { "COMPOSITE_L3", CERT_COMPOSITE, SEC_LEVEL_3, CA_COMPOSITE_L3, sizeof(CA_COMPOSITE_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11163, 0 },
+    { "COMPOSITE_L5", CERT_COMPOSITE, SEC_LEVEL_5, CA_COMPOSITE_L5, sizeof(CA_COMPOSITE_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11165, 0 },
     /* Falcon: ports 11171 (L1=Falcon-512), 11175 (L5=Falcon-1024); no L3 */
-    { "FALCON_L1",    CERT_FALCON,    SEC_LEVEL_1, CA_FALCON_L1,    sizeof(CA_FALCON_L1)    - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11171 },
-    { "FALCON_L5",    CERT_FALCON,    SEC_LEVEL_5, CA_FALCON_L5,    sizeof(CA_FALCON_L5)    - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11175 },
+    { "FALCON_L1",    CERT_FALCON,    SEC_LEVEL_1, CA_FALCON_L1,    sizeof(CA_FALCON_L1)    - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11171, 0 },
+    { "FALCON_L5",    CERT_FALCON,    SEC_LEVEL_5, CA_FALCON_L5,    sizeof(CA_FALCON_L5)    - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11175, 0 },
     /* SPHINCS+-SHAKE-fast: ports 11181(L1), 11183(L3), 11185(L5) */
-    { "SPHINCS_FAST_L1", CERT_SPHINCS_FAST, SEC_LEVEL_1, CA_SPHINCS_FAST_L1, sizeof(CA_SPHINCS_FAST_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11181 },
-    { "SPHINCS_FAST_L3", CERT_SPHINCS_FAST, SEC_LEVEL_3, CA_SPHINCS_FAST_L3, sizeof(CA_SPHINCS_FAST_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11183 },
-    { "SPHINCS_FAST_L5", CERT_SPHINCS_FAST, SEC_LEVEL_5, CA_SPHINCS_FAST_L5, sizeof(CA_SPHINCS_FAST_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11185 },
+    { "SPHINCS_FAST_L1", CERT_SPHINCS_FAST, SEC_LEVEL_1, CA_SPHINCS_FAST_L1, sizeof(CA_SPHINCS_FAST_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11181, 0 },
+    { "SPHINCS_FAST_L3", CERT_SPHINCS_FAST, SEC_LEVEL_3, CA_SPHINCS_FAST_L3, sizeof(CA_SPHINCS_FAST_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11183, 0 },
+    { "SPHINCS_FAST_L5", CERT_SPHINCS_FAST, SEC_LEVEL_5, CA_SPHINCS_FAST_L5, sizeof(CA_SPHINCS_FAST_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11185, 0 },
     /* SPHINCS+-SHAKE-small: ports 11191(L1) 11193(L3) 11195(L5) */
-    { "SPHINCS_SMALL_L1", CERT_SPHINCS_SMALL, SEC_LEVEL_1, CA_SPHINCS_SMALL_L1, sizeof(CA_SPHINCS_SMALL_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11191 },
-    { "SPHINCS_SMALL_L3", CERT_SPHINCS_SMALL, SEC_LEVEL_3, CA_SPHINCS_SMALL_L3, sizeof(CA_SPHINCS_SMALL_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11193 },
-    { "SPHINCS_SMALL_L5", CERT_SPHINCS_SMALL, SEC_LEVEL_5, CA_SPHINCS_SMALL_L5, sizeof(CA_SPHINCS_SMALL_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11195 },
+    { "SPHINCS_SMALL_L1", CERT_SPHINCS_SMALL, SEC_LEVEL_1, CA_SPHINCS_SMALL_L1, sizeof(CA_SPHINCS_SMALL_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11191, 0 },
+    { "SPHINCS_SMALL_L3", CERT_SPHINCS_SMALL, SEC_LEVEL_3, CA_SPHINCS_SMALL_L3, sizeof(CA_SPHINCS_SMALL_L3) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11193, 0 },
+    { "SPHINCS_SMALL_L5", CERT_SPHINCS_SMALL, SEC_LEVEL_5, CA_SPHINCS_SMALL_L5, sizeof(CA_SPHINCS_SMALL_L5) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11195, 0 },
+    /* ML-KEM KEM axis: cert = ECDSA L1 fixed, KEM group varies.
+     * Ports 11201-11206. kem_group selects the TLS key exchange group. */
+    { "KEM_X25519_BASELINE",    CERT_ECDSA, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11201, WOLFSSL_ECC_X25519           },
+    { "KEM_SECP256R1_BASELINE", CERT_ECDSA, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11202, WOLFSSL_ECC_SECP256R1        },
+    { "KEM_X25519MLKEM768",     CERT_ECDSA, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11203, WOLFSSL_X25519MLKEM768       },
+    { "KEM_SECP256R1MLKEM768",  CERT_ECDSA, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11204, WOLFSSL_SECP256R1MLKEM768    },
+    { "KEM_SECP384R1MLKEM1024", CERT_ECDSA, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11205, WOLFSSL_SECP384R1MLKEM1024   },
+    { "KEM_PURE_MLKEM768",      CERT_ECDSA, SEC_LEVEL_1, CA_ECDSA_L1, sizeof(CA_ECDSA_L1) - 1, NULL, 0, HYBCERT_NONE, 0, 0, 11206, WOLFSSL_ML_KEM_768           },
 };
 #define SCENARIO_COUNT  (sizeof(g_scenarios) / sizeof(g_scenarios[0]))
 
@@ -5459,6 +5468,11 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
     if (!ssl) { close(fd); return 0; }
 
     wolfSSL_set_fd(ssl, fd);
+
+    if (sc->kem_group != 0) {
+        wolfSSL_UseSupportedCurve(ssl, sc->kem_group);
+        wolfSSL_UseKeyShare(ssl, sc->kem_group);
+    }
 
     /* Reset per-message timing before each handshake */
     g_tls_t_server_hello_ms   = 0;
@@ -5694,6 +5708,10 @@ static int probe_scenario(const Scenario *sc)
     WOLFSSL *ssl = wolfSSL_new(ctx);
     if (ssl) {
         wolfSSL_set_fd(ssl, fd);
+        if (sc->kem_group != 0) {
+            wolfSSL_UseSupportedCurve(ssl, sc->kem_group);
+            wolfSSL_UseKeyShare(ssl, sc->kem_group);
+        }
         printf("\n====== [%s] TLS Handshake Start ======\n", sc->name);
         int ret = wolfSSL_connect(ssl);
         if (ret == WOLFSSL_SUCCESS) {

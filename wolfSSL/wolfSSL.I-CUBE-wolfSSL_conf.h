@@ -73,7 +73,7 @@
 #define WOLF_CONF_CHAPOLY      1
 
 /*---------- WOLF_CONF_EDCURVE25519 -----------*/
-#define WOLF_CONF_EDCURVE25519      0
+#define WOLF_CONF_EDCURVE25519      1
 
 /*---------- WOLF_CONF_MD5 -----------*/
 #define WOLF_CONF_MD5      0
@@ -115,7 +115,7 @@
 #define WOLF_CONF_TEST      1
 
 /*---------- WOLF_CONF_KYBER -----------*/
-#define WOLF_CONF_KYBER      0
+#define WOLF_CONF_KYBER      1
 
 /*---------- WOLF_CONF_ARMASM -----------*/
 #define WOLF_CONF_ARMASM      0
