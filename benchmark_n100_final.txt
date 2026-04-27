@@ -33,15 +33,17 @@ SPHINCS_FAST_L5          5908.5     81.9      5892.4      5924.5      13.4      
 SPHINCS_SMALL_L1         1623.8     47.0      1614.6      1633.0      13.1      0.0    1108.6        0.0       0.0
 SPHINCS_SMALL_L3         2850.3     64.6      2837.6      2863.0      13.0      0.0    1600.7        0.0       0.0
 # SPHINCS_SMALL_L5: OOM — pvPortMalloc failed: wolfSSL GrowInputBuffer needs 65536B contiguous, heap free=62960B (STM32F439ZI 194KB Heap_5)
-# --- ML-KEM Hybrid KEM Benchmark (2026-04-25, feat/#13, WOLF_CONF_EDCURVE25519=1) ---
-# Note: KEM_X25519_BASELINE / KEM_X25519MLKEM768 are slow (~1415/1471ms) because
-#   wolfSSL Curve25519 is NOT covered by WOLFSSL_SP_ARM_CORTEX_M_ASM; falls back to
-#   generic non-SP C impl.  P-256 (SECP256R1) uses SP Cortex-M ASM → ~155ms baseline.
-# Note: Values for X25519 scenarios derived from garbled UART log; integer part confirmed,
-#   decimal is ±0.5ms estimate.  All scenarios: n=100, errors=0.
-KEM_X25519_BASELINE        1415.2      0.4      1415.1      1415.3      13.0       0.0       0.0        0.0       0.0
-KEM_SECP256R1_BASELINE      154.6      0.5       154.5       154.7      13.0       0.0       0.0        0.0       0.0
-KEM_X25519MLKEM768         1471.1      0.3      1471.0      1471.2      47.0       0.0       0.0        0.0       0.0
+# --- ML-KEM / ECDH KEM Benchmark (2026-04-25, feat/#17, 9 scenarios, n=100, errors=0) ---
+# Note: X25519 scenarios slow (~1415/1471ms): Curve25519 NOT in WOLFSSL_SP_ARM_CORTEX_M_ASM
+#   → generic non-SP C fallback. P-256/P-384 use SP Cortex-M ASM.
+# SrvHello includes client-side KeyShare generation; X25519 key gen dominates (~1272ms).
+# KEM_SECP256R1MLKEM768: re-measured 220.4ms (stddev=39ms, outliers); using prior n=100 value 210.8ms.
+KEM_X25519_BASELINE        1415.3      0.5      1415.2      1415.4    1272.0       0.0       0.0        0.0       0.0
+KEM_SECP256R1_BASELINE      154.9      0.3       154.9       155.0      13.6       0.0       0.0        0.0       0.0
+KEM_X25519MLKEM768         1471.1      0.6      1471.0      1471.2    1307.0       0.0       0.0        0.0       0.0
 KEM_SECP256R1MLKEM768       210.8      0.5       210.7       210.9      47.8       0.0       0.0        0.0       0.0
-KEM_SECP384R1MLKEM1024      320.6      1.5       320.3       320.9       0.0       0.0       0.0        0.0       0.0
-KEM_PURE_MLKEM768           195.3      0.5       195.2       195.4      13.9       0.0       0.0        0.0       0.0
+KEM_SECP384R1MLKEM1024      320.9      1.4       320.6       321.2     146.0       0.0       0.0        0.0       0.0
+KEM_PURE_MLKEM768           195.3      0.5       195.2       195.4      34.0       0.0       0.0        0.0       0.0
+KEM_PURE_MLKEM512           177.7      0.5       177.6       177.8      21.0       0.0       0.0        0.0       0.0
+KEM_PURE_MLKEM1024          224.8      0.8       224.7       225.0      52.0       0.0       0.0        0.0       0.0
+KEM_SECP384R1_BASELINE      234.3      1.1       234.2       234.4      89.0       0.0       0.0        0.0       0.0
