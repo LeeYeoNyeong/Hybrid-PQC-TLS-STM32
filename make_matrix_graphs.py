@@ -25,17 +25,19 @@ CERT_LABEL = {
     'SPHINCS_FAST': 'SPHINCS+\n(fast)', 'SPHINCS_SMALL': 'SPHINCS+\n(small)',
 }
 
-# 9 matrix columns: (level, kem_suffix, column_label)
+# 11 matrix columns: (level, kem_suffix, column_label)
 COLS = [
-    ('L1', 'P256',    'L1\nP-256'),
-    ('L1', 'X25519',  'L1\nX25519*'),
-    ('L1', 'MLKEM512','L1\nMLKEM512'),
-    ('L3', 'P256',    'L3\nP-256'),
-    ('L3', 'HYB768',  'L3\nHYB768'),
-    ('L3', 'MLKEM768','L3\nMLKEM768'),
-    ('L5', 'P384',    'L5\nP-384'),
-    ('L5', 'HYB1024', 'L5\nHYB1024'),
-    ('L5', 'MLKEM1024','L5\nMLKEM1024'),
+    ('L1', 'P256',           'L1\nP-256'),
+    ('L1', 'X25519',         'L1\nX25519*'),
+    ('L1', 'X25519MLKEM512', 'L1\nX25519\nMLKEM512'),
+    ('L1', 'MLKEM512',       'L1\nMLKEM512'),
+    ('L3', 'P256',           'L3\nP-256'),
+    ('L3', 'HYB768',         'L3\nHYB768'),
+    ('L3', 'X25519MLKEM768', 'L3\nX25519\nMLKEM768'),
+    ('L3', 'MLKEM768',       'L3\nMLKEM768'),
+    ('L5', 'P384',           'L5\nP-384'),
+    ('L5', 'HYB1024',        'L5\nHYB1024'),
+    ('L5', 'MLKEM1024',      'L5\nMLKEM1024'),
 ]
 
 
@@ -242,18 +244,19 @@ def plot_cert_comparison():
 
 def plot_kem_comparison():
     L1_KEMS = [
-        ('P256',    'P-256 (classical)', '#4A90D9'),
-        ('X25519',  'X25519* (non-SP)',  '#F5A623'),
-        ('MLKEM512','ML-KEM-512 (PQC)',  '#2ECC71'),
+        ('P256',           'P-256 (classical)',        '#4A90D9'),
+        ('X25519',         'X25519* (non-SP)',          '#F5A623'),
+        ('X25519MLKEM512', 'X25519+ML-KEM-512 (hybrid)','#9B59B6'),
+        ('MLKEM512',       'ML-KEM-512 (PQC)',          '#2ECC71'),
     ]
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(16, 6))
     n_cert = len(CERT_ORDER)
-    width  = 0.27
+    width  = 0.22
     x = np.arange(n_cert)
 
     for i, (kem, label, color) in enumerate(L1_KEMS):
         vals = [timing.get(key(c, 'L1', kem), 0) for c in CERT_ORDER]
-        offset = (i - 1) * width
+        offset = (i - 1.5) * width
         bars = ax.bar(x + offset, vals, width=width, label=label, color=color, alpha=0.85)
         for bar, val in zip(bars, vals):
             if val > 0:
