@@ -5232,28 +5232,32 @@ static int is_scenario_skipped(const char *name)
 }
 
 #if BENCH_MODE_MATRIX
-/* Per-level helpers: each expands to 3 scenario rows (one per KEM group).
- * L1: KEM-A=P-256(23) KEM-B=X25519(29) KEM-C=MLKEM512(512)
- * L3: KEM-A=P-256(23) KEM-B=SecP256r1MLKEM768(4587) KEM-C=MLKEM768(513)
+/* Per-level helpers: each expands to N scenario rows (one per KEM group).
+ * L1: KEM-A=P-256(23) KEM-B=X25519(29) KEM-C=X25519MLKEM512(12214) KEM-D=MLKEM512(512)
+ * L3: KEM-A=P-256(23) KEM-B=SecP256r1MLKEM768(4587)
+ *     KEM-C=X25519MLKEM768(4588) KEM-D=MLKEM768(513)
  * L5: KEM-A=P-384(24) KEM-B=SecP384r1MLKEM1024(4589) KEM-C=MLKEM1024(514) */
 #define MR1(nm,ty,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port) \
-    { nm "_P256",     ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_SECP256R1        }, \
-    { nm "_X25519",   ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_X25519           }, \
-    { nm "_MLKEM512", ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ML_KEM_512           }
+    { nm "_P256",           ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_SECP256R1        }, \
+    { nm "_X25519",         ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_X25519           }, \
+    { nm "_X25519MLKEM512", ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_X25519MLKEM512       }, \
+    { nm "_MLKEM512",       ty,SEC_LEVEL_1,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ML_KEM_512           }
 #define MR3(nm,ty,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port) \
-    { nm "_P256",     ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_SECP256R1        }, \
-    { nm "_HYB768",   ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_SECP256R1MLKEM768    }, \
-    { nm "_MLKEM768", ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ML_KEM_768           }
+    { nm "_P256",           ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_SECP256R1        }, \
+    { nm "_HYB768",         ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_SECP256R1MLKEM768    }, \
+    { nm "_X25519MLKEM768", ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_X25519MLKEM768       }, \
+    { nm "_MLKEM768",       ty,SEC_LEVEL_3,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ML_KEM_768           }
 #define MR5(nm,ty,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port) \
     { nm "_P384",      ty,SEC_LEVEL_5,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ECC_SECP384R1        }, \
     { nm "_HYB1024",   ty,SEC_LEVEL_5,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_SECP384R1MLKEM1024   }, \
     { nm "_MLKEM1024", ty,SEC_LEVEL_5,ca,ca_sz,alt,alt_sz,hyb,cks,rel,port,WOLFSSL_ML_KEM_1024          }
 
 static const Scenario g_scenarios[] = {
-    /* === CERT × KEM MATRIX: 28 cert×level × 3 KEM = 84 scenarios ===
-     * Batch A (~60min): ECDSA/MLDSA/RELATED/CATALYST/CHAMELEON/DUAL/COMPOSITE/FALCON × 3 KEM
-     * Batch B (~60min): SPHINCS_FAST L1/L3/L5 × 3 KEM
-     * Batch C (~50min): SPHINCS_SMALL L1/L3 × 3 KEM  (L5 excluded: OOM) */
+    /* === CERT × KEM MATRIX: ~28 cert×level × 3-4 KEM = 95 scenarios ===
+     * L1: 4 KEM (P256/X25519/X25519MLKEM512/MLKEM512)
+     * L3: 4 KEM (P256/HYB768/X25519MLKEM768/MLKEM768)
+     * L5: 3 KEM (P384/HYB1024/MLKEM1024)
+     * SPHINCS_FAST L3/L5 excluded: pvPortMalloc(~140KB) fails (hardware limit) */
     MR1("ECDSA_L1",   CERT_ECDSA,   CA_ECDSA_L1,   sizeof(CA_ECDSA_L1)-1,   NULL,0,HYBCERT_NONE,     0,0,11101),
     MR3("ECDSA_L3",   CERT_ECDSA,   CA_ECDSA_L3,   sizeof(CA_ECDSA_L3)-1,   NULL,0,HYBCERT_NONE,     0,0,11103),
     MR5("ECDSA_L5",   CERT_ECDSA,   CA_ECDSA_L5,   sizeof(CA_ECDSA_L5)-1,   NULL,0,HYBCERT_NONE,     0,0,11105),
@@ -5708,21 +5712,21 @@ static void run_scenario(const Scenario *sc)
     Stats s;
     calc_stats(samples, TLS_REPEAT_COUNT, errors, &s);
 
-    /* Per-phase means from cumulative timestamps (compute incremental) */
+    /* Per-phase means: g_tls_t_* variables store individual handler durations,
+     * not cumulative timestamps — sum directly. */
     int n = TLS_REPEAT_COUNT - errors;
     float sum_sh = 0, sum_cert = 0, sum_cv = 0, sum_pqcv = 0, sum_fin = 0;
     int   n_pqcv = 0;
     for (int i = 0; i < TLS_REPEAT_COUNT; i++) {
         if (samples[i] == 0) continue;
         sum_sh   += (float)sh_ms[i];
-        sum_cert += (float)(cert_ms[i] > sh_ms[i] ? cert_ms[i] - sh_ms[i] : 0);
-        sum_cv   += (float)(cv_ms[i]   > cert_ms[i] ? cv_ms[i] - cert_ms[i] : 0);
+        sum_cert += (float)cert_ms[i];
+        sum_cv   += (float)cv_ms[i];
         if (pqcv_ms[i] > 0) {
-            sum_pqcv += (float)(pqcv_ms[i] > cv_ms[i] ? pqcv_ms[i] - cv_ms[i] : 0);
+            sum_pqcv += (float)pqcv_ms[i];
             n_pqcv++;
         }
-        uint32_t last = (pqcv_ms[i] > 0) ? pqcv_ms[i] : cv_ms[i];
-        sum_fin  += (float)(fin_ms[i]  > last ? fin_ms[i] - last : 0);
+        sum_fin  += (float)fin_ms[i];
     }
     if (n <= 0) n = 1;
     float mean_sh   = sum_sh   / n;

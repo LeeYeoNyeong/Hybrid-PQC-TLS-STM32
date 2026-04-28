@@ -34,7 +34,9 @@ def parse(log_path):
     ok_re      = re.compile(
         r'\b((?:ECDSA|MLDSA|CATALYST|CHAMELEON|RELATED|DUAL|COMPOSITE'
         r'|FALCON|SPHINCS_FAST|SPHINCS_SMALL)'
-        r'_L[135]_(?:P256|P384|X25519|HYB768|HYB1024|MLKEM512|MLKEM768|MLKEM1024))\b'
+        r'_L[135]_(?:P256|P384|X25519|HYB768|HYB1024'
+        r'|X25519MLKEM512|X25519MLKEM768'
+        r'|MLKEM512|MLKEM768|MLKEM1024))\b'
         r'.*?OK \((\d+) ms\)')
     results_re = re.compile(r'Results:\s+([A-Z][A-Z0-9_]+)')
     # Tightened: require d+.d+ and trailing ms to avoid garbled float strings
