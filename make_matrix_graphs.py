@@ -65,6 +65,29 @@ def load_phases(path):
     return data
 
 
+def load_sizes(path):
+    """Return ({scenario: cert_b}, {scenario: peak_used_cum_b}) from -s output file."""
+    cert_bytes = {}
+    heap_bytes = {}
+    mode = None
+    with open(path) as f:
+        for line in f:
+            line = line.rstrip()
+            if 'Cert_B' in line:
+                mode = 'sizes'
+            elif 'min_free_B' in line:
+                mode = 'heap'
+            elif mode == 'sizes':
+                m = re.match(r'([A-Z][A-Z0-9_]+)\s+(\d+)\s+(\d+)\s+(\d+)', line)
+                if m:
+                    cert_bytes[m.group(1)] = int(m.group(2))
+            elif mode == 'heap':
+                m = re.match(r'([A-Z][A-Z0-9_]+)\s+(\d+)\s+(\d+)', line)
+                if m:
+                    heap_bytes[m.group(1)] = int(m.group(3))
+    return cert_bytes, heap_bytes
+
+
 def key(cert, level, kem):
     return f'{cert}_{level}_{kem}'
 
@@ -298,11 +321,107 @@ def plot_pqc_decomposition():
     print(f'[saved] {out}')
 
 
+SZ_FILE = 'benchmark_matrix_sizes_n100_20260428.txt'
+
+LEVEL_COLORS = {'L1': '#2ECC71', 'L3': '#F39C12', 'L5': '#E74C3C'}
+
+
+def plot_cert_chain_sizes(sz_file=SZ_FILE):
+    """Bar chart: cert chain DER total bytes per cert type × security level (P256 baseline KEM)."""
+    if not os.path.exists(sz_file):
+        print(f'[skip] {sz_file} not found — run capture first')
+        return
+    cert_bytes, _ = load_sizes(sz_file)
+
+    # collect P256/P384 baseline KEM per level for each cert type
+    records = {}  # cert -> {level: bytes}
+    baseline_kem = {'L1': 'P256', 'L3': 'P256', 'L5': 'P384'}
+    for cert in CERT_ORDER:
+        records[cert] = {}
+        for lv, bk in baseline_kem.items():
+            sc = key(cert, lv, bk)
+            if sc in cert_bytes and cert_bytes[sc] > 0:
+                records[cert][lv] = cert_bytes[sc]
+
+    labels = [CERT_LABEL[c].replace('\n', '\n') for c in CERT_ORDER]
+    x = np.arange(len(CERT_ORDER))
+    w = 0.25
+    fig, ax = plt.subplots(figsize=(13, 5))
+    for i, lv in enumerate(['L1', 'L3', 'L5']):
+        vals = [records[c].get(lv, 0) for c in CERT_ORDER]
+        bars = ax.bar(x + (i - 1) * w, vals, w, label=lv, color=LEVEL_COLORS[lv])
+        for b, v in zip(bars, vals):
+            if v > 0:
+                ax.text(b.get_x() + b.get_width() / 2, b.get_height() + 20,
+                        f'{v}', ha='center', va='bottom', fontsize=6, rotation=90)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel('Cert Chain DER Total (bytes)')
+    ax.set_title('Peer Certificate Chain DER Size by Cert Type & Security Level\n'
+                 '(Baseline KEM: L1/L3=P-256, L5=P-384; sum of all DER certs in SESSION_CERTS chain)',
+                 fontsize=10)
+    ax.legend(title='Level')
+    plt.tight_layout()
+    out = f'{OUT_DIR}/handshake_size_per_alg.png'
+    plt.savefig(out, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'[saved] {out}')
+
+
+def plot_heap_watermark(sz_file=SZ_FILE):
+    """Horizontal bar chart: cumulative heap peak_used per cert type (worst KEM per level)."""
+    if not os.path.exists(sz_file):
+        print(f'[skip] {sz_file} not found — run capture first')
+        return
+    _, heap_bytes = load_sizes(sz_file)
+    if not heap_bytes:
+        print('[skip] no heap data in sizes file')
+        return
+
+    # highest peak_used per cert type across all KEM/level combos
+    worst = {}
+    for sc, pu in heap_bytes.items():
+        parts = sc.split('_')
+        cert = '_'.join(parts[:-2]) if len(parts) > 3 else parts[0]
+        # try to match known cert types
+        for c in CERT_ORDER:
+            if sc.startswith(c + '_'):
+                worst[c] = max(worst.get(c, 0), pu)
+                break
+
+    labels = [CERT_LABEL[c].replace('\n', ' ') for c in CERT_ORDER if c in worst]
+    vals   = [worst[c] / 1024 for c in CERT_ORDER if c in worst]
+    total_kb = 194.0  # CCM 56KB + SRAM 138KB
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    colors = plt.cm.RdYlGn_r(np.linspace(0.2, 0.8, len(vals)))
+    bars = ax.barh(labels, vals, color=colors)
+    ax.axvline(total_kb, color='red', linestyle='--', linewidth=1.2, label=f'Total heap {total_kb:.0f} KB')
+    for b, v in zip(bars, vals):
+        ax.text(v + 1, b.get_y() + b.get_height() / 2,
+                f'{v:.1f} KB', va='center', fontsize=8)
+    ax.set_xlabel('Cumulative Peak Used Heap (KB, since boot)')
+    ax.set_title('Heap Peak Usage by Cert Type\n'
+                 '(worst scenario per type; cumulative since boot — monotonically non-decreasing)',
+                 fontsize=10)
+    ax.legend()
+    plt.tight_layout()
+    out = f'{OUT_DIR}/heap_peak_per_scenario.png'
+    plt.savefig(out, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'[saved] {out}')
+
+
 if __name__ == '__main__':
+    import sys
+    sz_file = sys.argv[1] if len(sys.argv) > 1 else SZ_FILE
     plot_heatmap()
     plot_stacked_breakdown()
     plot_cert_comparison()
     plot_kem_comparison()
     plot_pqc_decomposition()
-    print(f'\n✅ All graphs saved to {OUT_DIR}/')
+    plot_cert_chain_sizes(sz_file)
+    plot_heap_watermark(sz_file)
+    print(f'\nAll graphs saved to {OUT_DIR}/')
     print(f'   Files: {sorted(os.listdir(OUT_DIR))}')
