@@ -1,11 +1,36 @@
-build
-Debug
-Release
+# ── 빌드 산출물 ───────────────────────────────────────────────
+build/
+Debug/
+Release/
 mx.scratch
-!.settings
 *.elf
 *.bin
 *.hex
 *.map
 *.o
 *.d
+
+# ── IDE / 개인 환경 설정 ──────────────────────────────────────
+# STM32CubeIDE 개인 작업 환경 (.ioc 파일로 재생성 가능)
+.settings/
+.mxproject
+# STM32CubeIDE / Eclipse 런치 파일 (경로·환경 종속)
+*.launch
+# clangd LSP 개인 설정
+.clangd
+# Python 캐시
+__pycache__/
+*.pyc
+
+# ── 개인 작업 노트 ────────────────────────────────────────────
+# Claude 세션 로그 — 코드가 아닌 작업 노트, Obsidian/session_log.md로 관리
+session_progress.md
+
+# ── UART 캡처 로그 ────────────────────────────────────────────
+# 바이너리에 가까운 대용량 로그, 재측정으로 재생성 가능
+uart_*.log
+
+# ── 재생성 가능한 그래프·이미지 ──────────────────────────────
+# make_matrix_graphs.py 로 언제든 재생성 가능 → git LFS 없이 PNG 추적 불필요
+benchmark_graphs_*/
+benchmark_graphs_archive_*/
