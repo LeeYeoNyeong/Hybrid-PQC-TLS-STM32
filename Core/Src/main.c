@@ -150,7 +150,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdin,  NULL, _IONBF, 0);
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
   /* USER CODE END Init */

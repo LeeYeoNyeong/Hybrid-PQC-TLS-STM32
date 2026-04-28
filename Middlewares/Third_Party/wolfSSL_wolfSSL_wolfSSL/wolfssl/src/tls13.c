@@ -11307,12 +11307,9 @@ static int DoTls13PQCertificateVerify(WOLFSSL* ssl, byte* input,
     sig = input + *inOutIdx;
     *inOutIdx += sigLen;
 
-    printf("[TLS] PQCertificateVerify: sigLen=%u\r\n", (unsigned)sigLen);
-
 #if defined(HAVE_DILITHIUM)
     if (ssl->peerSapkiDer == NULL || ssl->peerSapkiLen <= 0) {
         /* No ML-DSA pubkey available — accept without verification */
-        printf("[TLS] PQCertificateVerify: no peer SAPKI, skipping ML-DSA verify\r\n");
         goto accept;
     }
 
@@ -11341,10 +11338,7 @@ static int DoTls13PQCertificateVerify(WOLFSSL* ssl, byte* input,
         if (ret == 0 && res != 1) ret = SIG_VERIFY_E;
     }
 
-    if (ret == 0)
-        printf("[TLS] PQCertificateVerify: ML-DSA verification OK\r\n");
-    else
-        printf("[TLS] PQCertificateVerify: ML-DSA verification FAILED err=%d\r\n", ret);
+    /* verification result recorded in ret */
     goto done;
 
 accept:
@@ -13184,9 +13178,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
         WOLFSSL_MSG("processing server hello");
         ret = DoTls13ServerHello(ssl, input, inOutIdx, size, &type);
         g_tls_t_server_hello_ms = TLS13_TICK() - _t0;
-        if (ret == 0)
-            printf("[TLS] ServerHello received (%lu bytes) [%lu ms]\r\n",
-                   (unsigned long)size, (unsigned long)g_tls_t_server_hello_ms);
+        /* phase print removed — use run_scenario summary instead */
     #if !defined(WOLFSSL_NO_CLIENT_AUTH) && \
                ((defined(HAVE_ED25519) && !defined(NO_ED25519_CLIENT_AUTH)) || \
                 (defined(HAVE_ED448) && !defined(NO_ED448_CLIENT_AUTH)))
@@ -13206,8 +13198,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
     case encrypted_extensions:
         WOLFSSL_MSG("processing encrypted extensions");
         ret = DoTls13EncryptedExtensions(ssl, input, inOutIdx, size);
-        if (ret == 0)
-            printf("[TLS] EncryptedExtensions received (%lu bytes)\r\n", (unsigned long)size);
+        /* phase print removed */
         break;
 
     #ifndef NO_CERTS
@@ -13302,9 +13293,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
         WOLFSSL_MSG("processing certificate");
         ret = DoTls13Certificate(ssl, input, inOutIdx, size);
         g_tls_t_cert_ms = TLS13_TICK() - _t0;
-        if (ret == 0)
-            printf("[TLS] Certificate received (%lu bytes) [%lu ms]\r\n",
-                   (unsigned long)size, (unsigned long)g_tls_t_cert_ms);
+        /* phase print removed */
         break;
     }
 #endif
@@ -13316,12 +13305,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
         WOLFSSL_MSG("processing certificate verify");
         ret = DoTls13CertificateVerify(ssl, input, inOutIdx, size);
         g_tls_t_cert_verify_ms = TLS13_TICK() - _t0;
-        if (ret == 0)
-            printf("[TLS] CertificateVerify received (%lu bytes), OK [%lu ms]\r\n",
-                   (unsigned long)size, (unsigned long)g_tls_t_cert_verify_ms);
-        else
-            printf("[TLS] CertificateVerify FAILED (%lu bytes) err=%d [%lu ms]\r\n",
-                   (unsigned long)size, ret, (unsigned long)g_tls_t_cert_verify_ms);
+        /* phase print removed */
         break;
     }
 #endif
@@ -13331,12 +13315,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
         WOLFSSL_MSG("processing pq certificate verify");
         ret = DoTls13PQCertificateVerify(ssl, input, inOutIdx, size);
         g_tls_t_pq_cert_verify_ms = TLS13_TICK() - _t0;
-        if (ret == 0)
-            printf("[TLS] PQCertificateVerify received (%lu bytes), OK [%lu ms]\r\n",
-                   (unsigned long)size, (unsigned long)g_tls_t_pq_cert_verify_ms);
-        else
-            printf("[TLS] PQCertificateVerify FAILED (%lu bytes) err=%d [%lu ms]\r\n",
-                   (unsigned long)size, ret, (unsigned long)g_tls_t_pq_cert_verify_ms);
+        /* phase print removed */
         break;
     }
 #endif
@@ -13345,9 +13324,7 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
         WOLFSSL_MSG("processing finished");
         ret = DoTls13Finished(ssl, input, inOutIdx, size, totalSz, NO_SNIFF);
         g_tls_t_finished_ms = TLS13_TICK() - _t0;
-        if (ret == 0)
-            printf("[TLS] Finished received (%lu bytes) [%lu ms]\r\n",
-                   (unsigned long)size, (unsigned long)g_tls_t_finished_ms);
+        /* phase print removed */
         break;
     }
 
