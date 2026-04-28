@@ -60,8 +60,6 @@ Settings → General → Pull Requests:
 <type>(<scope>): <요약, 50자 이내>
 
 <본문 — 왜 이 변경인지, 어떤 결정을 내렸는지 (#N)>
-
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
 
 **허용 type** (이 목록 외 사용 금지):
