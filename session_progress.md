@@ -410,3 +410,34 @@ mean stddev가 매우 작아(0.3~2.2ms) 신뢰 가능.
 - 수정 3: `uart_printf()` 스케줄러 상태 체크 `== RUNNING` → `!= NOT_STARTED` (SUSPENDED 상태 포함)
 - 빌드: ✅ (SRAM 99.53%, Flash 51.16%)
 - 후속 이슈 (PR 분리): critical section → `vTaskSuspendAll()` 전환 (ETH IRQ 보존)
+
+---
+
+## 2026-04-28 (세션 — Phase A/B/C 분석 파이프라인)
+
+### [DONE] Phase A — parse_matrix_log.py stage breakdown 추출 (#21, PR #22)
+- **태그**: `#feat` `#parser` `#stage-breakdown`
+- PR #20 squash-merge 선행 완료 (feat/#19-cert-kem-matrix)
+- Issue #21 → 브랜치 `feat/#21-stage-breakdown` → PR #22 merge (commit 5c976d2)
+- phases_re: `\d+\.\d+` + `\s*ms` 앵커, `expecting_phases` 플래그, all-zero 필터, `-p` CLI
+- critic + code-reviewer 병렬 리뷰 — CRITICAL 없음, HIGH 3개 수정
+- 산출물: `benchmark_matrix_phases_n100_20260427.txt` (76/78 시나리오 phases)
+- 주요 insight (단계별 분해):
+  - ECDSA Cert: P256=18ms, P384=181ms, HYB1024=129ms (인증서 체인 크기 비례)
+  - SPHINCS_FAST_L1 CertVfy: 3194ms (SHAKE verify 지배)
+  - SPHINCS_SMALL_L1 CertVfy: ~1101ms
+  - Falcon CertVfy: 22~36ms (매우 빠름)
+  - PQCertVfy(하이브리드): L1≈62ms, L3≈26~31ms, L5≈81~83ms
+
+### [DONE] Phase B — 그래프 재생성 (#23, PR #24)
+- **태그**: `#feat` `#graphs` `#visualization`
+- Issue #23 → 브랜치 `feat/#23-matrix-graphs`
+- benchmark_graphs_20260424/ → benchmark_graphs_archive_20260424/ (rename)
+- `make_matrix_graphs.py` 작성 (5개 그래프):
+  1. `cert_kem_heatmap.png` — 10 cert × 9 KEM 컬럼 격자, PowerNorm 색상, OOM=회색
+  2. `stacked_stage_breakdown.png` — 단계별 스택 막대 (SrvHello/Cert/CertVfy/PQCertVfy)
+  3. `cert_comparison_classical_kem.png` — P-256/P-384 KEM 고정, cert 9종 × 3레벨 비교
+  4. `kem_comparison_l1.png` — L1 cert별 3 KEM 그룹 비교
+  5. `pqc_cost_decomposition.png` — 하이브리드 4종 PQCertVfy 비율 분해
+- Spot-check 통과: ECDSA_L1_P256=312.1ms, SPHINCS_FAST CertVfy=3194.6ms ✓
+- 산출물: benchmark_graphs_20260428/ (5 PNG, 총 418KB)
