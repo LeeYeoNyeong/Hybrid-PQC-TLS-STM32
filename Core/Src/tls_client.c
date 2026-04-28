@@ -44,6 +44,12 @@ extern volatile uint32_t g_tls_t_pq_cert_verify_ms;
 extern volatile uint32_t g_tls_t_finished_ms;
 void tls13_set_tick_fn(uint32_t (*fn)(void));
 
+/* Handshake cert-chain size accumulator + heap watermark, reported in run_scenario */
+static volatile uint32_t g_msg_cert_bytes     = 0;
+static volatile uint32_t g_msg_certvy_bytes   = 0;
+static volatile uint32_t g_msg_pqcertvy_bytes = 0;
+static volatile uint32_t g_heap_min_free_b    = 0;
+
 /* Cert-parse sub-timing (set from internal.c) */
 extern volatile uint32_t g_cert_t_primary_ms;
 extern volatile uint32_t g_cert_t_pq_ms;
@@ -5509,6 +5515,7 @@ static void calc_stats(const uint32_t *samples, int n, int errors, Stats *s)
 /* ================================================================
  * Single TLS handshake: returns elapsed ms, 0 on error
  * ================================================================ */
+
 static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
 {
     static int hs_count = 0;
@@ -5548,6 +5555,9 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
         wolfSSL_UseKeyShare(ssl, sc->kem_group);
     }
 
+    /* Reset message size accumulators before each handshake */
+    g_msg_cert_bytes = g_msg_certvy_bytes = g_msg_pqcertvy_bytes = 0;
+
     /* Reset per-message timing before each handshake */
     g_tls_t_server_hello_ms   = 0;
     g_tls_t_cert_ms           = 0;
@@ -5567,6 +5577,19 @@ static uint32_t do_handshake(WOLFSSL_CTX *ctx, const Scenario *sc)
             printf("[TLS] peer policy validation failed for %s\n", sc->name);
         } else {
             elapsed = t_end - t_start;
+            g_heap_min_free_b = (uint32_t)xPortGetMinimumEverFreeHeapSize();
+            /* Cert chain DER total: TLS 1.3 encrypts handshake records so the
+             * msg_callback cannot measure them; use SESSION_CERTS chain instead. */
+            {
+                WOLFSSL_X509_CHAIN *ch = wolfSSL_get_peer_chain(ssl);
+                if (ch) {
+                    int n = wolfSSL_get_chain_count(ch);
+                    uint32_t tot = 0;
+                    for (int i = 0; i < n; i++)
+                        tot += (uint32_t)wolfSSL_get_chain_length(ch, i);
+                    g_msg_cert_bytes = tot;
+                }
+            }
         }
     } else {
         int err = wolfSSL_get_error(ssl, ret);
@@ -5714,6 +5737,18 @@ static void run_scenario(const Scenario *sc)
            s.mean_ms, s.stddev_ms, s.ci95_low_ms, s.ci95_high_ms);
     printf("[TLS] phases SrvHello=%.1f  Cert=%.1f  CertVfy=%.1f  PQCertVfy=%.1f  Finished=%.1f ms\n",
            mean_sh, mean_cert, mean_cv, mean_pqcv, mean_fin);
+    /* Message wire sizes (constant per cert type — captured from last good run) */
+    printf("[TLS] sizes Cert=%luB CertVfy=%luB PQCertVfy=%luB\n",
+           (unsigned long)g_msg_cert_bytes,
+           (unsigned long)g_msg_certvy_bytes,
+           (unsigned long)g_msg_pqcertvy_bytes);
+    /* Heap watermark: cumulative min_free since boot (non-decreasing worst-case).
+     * peak_used_cum = configTOTAL_HEAP_SIZE - min_free.  Only valid after ≥1 OK. */
+    if (g_heap_min_free_b != 0U) {
+        printf("[TLS] heap min_free=%luB peak_used=%luB\n",
+               (unsigned long)g_heap_min_free_b,
+               (unsigned long)(configTOTAL_HEAP_SIZE - g_heap_min_free_b));
+    }
 
     /* Cert-parse sub-timing summary */
     float sum_cp_primary = 0, sum_cp_pq = 0, sum_cp_leaf = 0, sum_cp_hash = 0;
