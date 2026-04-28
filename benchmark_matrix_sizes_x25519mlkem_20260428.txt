@@ -1,0 +1,197 @@
+Scenario                              Cert_B  CertVfy_B  PQCertVfy_B
+--------------------------------------------------------------------
+ECDSA_L1_P256                            841          0            0
+ECDSA_L1_X25519                          841          0            0
+ECDSA_L1_X25519MLKEM512                  841          0            0
+ECDSA_L1_MLKEM512                        841          0            0
+ECDSA_L3_P256                            964          0            0
+ECDSA_L3_HYB768                          964          0            0
+ECDSA_L3_X25519MLKEM768                  964          0            0
+ECDSA_L3_MLKEM768                        964          0            0
+ECDSA_L5_P384                           1113          0            0
+ECDSA_L5_HYB1024                        1113          0            0
+ECDSA_L5_MLKEM1024                      1113          0            0
+MLDSA_L1_P256                           8070          0            0
+MLDSA_L1_X25519                         8070          0            0
+MLDSA_L1_X25519MLKEM512                 8070          0            0
+MLDSA_L1_MLKEM512                       8070          0            0
+MLDSA_L3_P256                          11128          0            0
+MLDSA_L3_HYB768                        11128          0            0
+MLDSA_L3_X25519MLKEM768                11128          0            0
+MLDSA_L3_MLKEM768                      11128          0            0
+MLDSA_L5_P384                          15044          0            0
+MLDSA_L5_HYB1024                       15044          0            0
+MLDSA_L5_MLKEM1024                     15044          0            0
+RELATED_L1_P256                          841          0            0
+RELATED_L1_X25519                        841          0            0
+RELATED_L1_X25519MLKEM512                841          0            0
+RELATED_L1_MLKEM512                      841          0            0
+RELATED_L3_P256                          964          0            0
+RELATED_L3_HYB768                        964          0            0
+RELATED_L3_X25519MLKEM768                964          0            0
+RELATED_L3_MLKEM768                      964          0            0
+RELATED_L5_P384                         1113          0            0
+RELATED_L5_HYB1024                      1113          0            0
+RELATED_L5_MLKEM1024                    1113          0            0
+CATALYST_L1_P256                        8432          0            0
+CATALYST_L1_X25519                      8432          0            0
+CATALYST_L1_X25519MLKEM512              8432          0            0
+CATALYST_L1_MLKEM512                    8432          0            0
+CATALYST_L3_P256                       11613          0            0
+CATALYST_L3_HYB768                     11613          0            0
+CATALYST_L3_X25519MLKEM768             11613          0            0
+CATALYST_L3_MLKEM768                   11613          0            0
+CATALYST_L5_P384                       15676          0            0
+CATALYST_L5_HYB1024                    15676          0            0
+CATALYST_L5_MLKEM1024                  15676          0            0
+CHAMELEON_L1_P256                       8815          0            0
+CHAMELEON_L1_X25519                     8815          0            0
+CHAMELEON_L1_X25519MLKEM512             8815          0            0
+CHAMELEON_L1_MLKEM512                   8815          0            0
+CHAMELEON_L3_P256                      11995          0            0
+CHAMELEON_L3_HYB768                    11995          0            0
+CHAMELEON_L3_X25519MLKEM768            11995          0            0
+CHAMELEON_L3_MLKEM768                  11995          0            0
+CHAMELEON_L5_P384                      16061          0            0
+CHAMELEON_L5_HYB1024                   16061          0            0
+CHAMELEON_L5_MLKEM1024                 16061          0            0
+DUAL_L1_P256                             841          0            0
+DUAL_L1_X25519                           841          0            0
+DUAL_L1_X25519MLKEM512                   841          0            0
+DUAL_L1_MLKEM512                         841          0            0
+DUAL_L3_P256                             964          0            0
+DUAL_L3_HYB768                           964          0            0
+DUAL_L3_X25519MLKEM768                   964          0            0
+DUAL_L3_MLKEM768                         964          0            0
+DUAL_L5_P384                            1113          0            0
+DUAL_L5_HYB1024                         1113          0            0
+DUAL_L5_MLKEM1024                       1113          0            0
+COMPOSITE_L1_P256                       8269          0            0
+COMPOSITE_L1_X25519                     8269          0            0
+COMPOSITE_L1_X25519MLKEM512                0          0            0
+COMPOSITE_L1_MLKEM512                   8269          0            0
+COMPOSITE_L3_P256                      11457          0            0
+COMPOSITE_L3_HYB768                    11457          0            0
+COMPOSITE_L3_X25519MLKEM768                0          0            0
+COMPOSITE_L3_MLKEM768                  11457          0            0
+COMPOSITE_L5_P384                      15515          0            0
+COMPOSITE_L5_HYB1024                   15515          0            0
+COMPOSITE_L5_MLKEM1024                 15515          0            0
+FALCON_L1_P256                          3660          0            0
+FALCON_L1_X25519                        3660          0            0
+FALCON_L1_X25519MLKEM512                   0          0            0
+FALCON_L1_MLKEM512                      3660          0            0
+FALCON_L5_P384                          6693          0            0
+FALCON_L5_HYB1024                       6693          0            0
+FALCON_L5_MLKEM1024                     6693          0            0
+SPHINCS_FAST_L1_P256                       0          0            0
+SPHINCS_FAST_L1_X25519                     0          0            0
+SPHINCS_FAST_L1_X25519MLKEM512             0          0            0
+SPHINCS_FAST_L1_MLKEM512                   0          0            0
+SPHINCS_SMALL_L1_P256                  16360          0            0
+SPHINCS_SMALL_L1_X25519                16360          0            0
+SPHINCS_SMALL_L1_X25519MLKEM512            0          0            0
+SPHINCS_SMALL_L1_MLKEM512              16360          0            0
+SPHINCS_SMALL_L3_P256                      0          0            0
+SPHINCS_SMALL_L3_HYB768                    0          0            0
+SPHINCS_SMALL_L3_X25519MLKEM768            0          0            0
+SPHINCS_SMALL_L3_MLKEM768                  0          0            0
+
+Scenario                            min_free_B  peak_used_cum_B
+---------------------------------------------------------------
+ECDSA_L1_P256                            63320           135336
+ECDSA_L1_X25519                          63264           135392
+ECDSA_L1_X25519MLKEM512                  60560           138096
+ECDSA_L1_MLKEM512                        60560           138096
+ECDSA_L3_P256                            60216           138440
+ECDSA_L3_HYB768                          53624           145032
+ECDSA_L3_X25519MLKEM768                  53624           145032
+ECDSA_L3_MLKEM768                        53624           145032
+ECDSA_L5_P384                            53624           145032
+ECDSA_L5_HYB1024                         44920           153736
+ECDSA_L5_MLKEM1024                       44920           153736
+MLDSA_L1_P256                            43056           155600
+MLDSA_L1_X25519                          43000           155656
+MLDSA_L1_X25519MLKEM512                  41312           157344
+MLDSA_L1_MLKEM512                        40408           158248
+MLDSA_L3_P256                            35032           163624
+MLDSA_L3_HYB768                          32600           166056
+MLDSA_L3_X25519MLKEM768                  32560           166096
+MLDSA_L3_MLKEM768                        31240           167416
+MLDSA_L5_P384                            24896           173760
+MLDSA_L5_HYB1024                         21536           177120
+MLDSA_L5_MLKEM1024                       20064           178592
+RELATED_L1_P256                          20064           178592
+RELATED_L1_X25519                        20064           178592
+RELATED_L1_X25519MLKEM512                20064           178592
+RELATED_L1_MLKEM512                      20064           178592
+RELATED_L3_P256                          20064           178592
+RELATED_L3_HYB768                        20064           178592
+RELATED_L3_X25519MLKEM768                20064           178592
+RELATED_L3_MLKEM768                      20064           178592
+RELATED_L5_P384                          20064           178592
+RELATED_L5_HYB1024                       20064           178592
+RELATED_L5_MLKEM1024                     20064           178592
+CATALYST_L1_P256                         20064           178592
+CATALYST_L1_X25519                       20064           178592
+CATALYST_L1_X25519MLKEM512               20064           178592
+CATALYST_L1_MLKEM512                     20064           178592
+CATALYST_L3_P256                         20064           178592
+CATALYST_L3_HYB768                       20064           178592
+CATALYST_L3_X25519MLKEM768               20064           178592
+CATALYST_L3_MLKEM768                     20064           178592
+CATALYST_L5_P384                         19432           179224
+CATALYST_L5_HYB1024                      16128           182528
+CATALYST_L5_MLKEM1024                    14640           184016
+CHAMELEON_L1_P256                        14640           184016
+CHAMELEON_L1_X25519                      14640           184016
+CHAMELEON_L1_X25519MLKEM512              14640           184016
+CHAMELEON_L1_MLKEM512                    14640           184016
+CHAMELEON_L3_P256                        14640           184016
+CHAMELEON_L3_HYB768                      14640           184016
+CHAMELEON_L3_X25519MLKEM768              14640           184016
+CHAMELEON_L3_MLKEM768                    14640           184016
+CHAMELEON_L5_P384                         8344           190312
+CHAMELEON_L5_HYB1024                      4992           193664
+CHAMELEON_L5_MLKEM1024                    3520           195136
+DUAL_L1_P256                              3520           195136
+DUAL_L1_X25519                            3520           195136
+DUAL_L1_X25519MLKEM512                    3520           195136
+DUAL_L1_MLKEM512                          3520           195136
+DUAL_L3_P256                              3520           195136
+DUAL_L3_HYB768                            3520           195136
+DUAL_L3_X25519MLKEM768                    3520           195136
+DUAL_L3_MLKEM768                          3520           195136
+DUAL_L5_P384                              3520           195136
+DUAL_L5_HYB1024                           3520           195136
+DUAL_L5_MLKEM1024                         3520           195136
+COMPOSITE_L1_P256                         3520           195136
+COMPOSITE_L1_X25519                       3520           195136
+COMPOSITE_L1_X25519MLKEM512               3520           195136
+COMPOSITE_L1_MLKEM512                     3520           195136
+COMPOSITE_L3_P256                         3520           195136
+COMPOSITE_L3_HYB768                       3520           195136
+COMPOSITE_L3_X25519MLKEM768               3520           195136
+COMPOSITE_L3_MLKEM768                     3520           195136
+COMPOSITE_L5_P384                         3520           195136
+COMPOSITE_L5_HYB1024                      3520           195136
+COMPOSITE_L5_MLKEM1024                    3520           195136
+FALCON_L1_P256                            3520           195136
+FALCON_L1_X25519                          3520           195136
+FALCON_L1_X25519MLKEM512                  3520           195136
+FALCON_L1_MLKEM512                        3520           195136
+FALCON_L5_P384                            3520           195136
+FALCON_L5_HYB1024                         3520           195136
+FALCON_L5_MLKEM1024                       3520           195136
+SPHINCS_FAST_L1_P256                      3520           195136
+SPHINCS_FAST_L1_X25519                    3520           195136
+SPHINCS_FAST_L1_X25519MLKEM512            3520           195136
+SPHINCS_FAST_L1_MLKEM512                  3520           195136
+SPHINCS_SMALL_L1_P256                     3520           195136
+SPHINCS_SMALL_L1_X25519                   3520           195136
+SPHINCS_SMALL_L1_X25519MLKEM512           3520           195136
+SPHINCS_SMALL_L1_MLKEM512                 3520           195136
+SPHINCS_SMALL_L3_P256                     3520           195136
+SPHINCS_SMALL_L3_HYB768                   3520           195136
+SPHINCS_SMALL_L3_X25519MLKEM768           3520           195136
+SPHINCS_SMALL_L3_MLKEM768                 3520           195136
