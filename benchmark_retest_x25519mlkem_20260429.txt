@@ -1,0 +1,44 @@
+Scenario                                n  err     mean  stddev    min    max  95CI_lo  95CI_hi
+-----------------------------------------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512            95    0   1769.2     0.4   1769   1771   1769.1   1769.3
+COMPOSITE_L3_X25519MLKEM768           100    0   2246.3     0.6   2246   2250   2246.2   2246.5
+FALCON_L1_X25519MLKEM512              100    0   1445.9     0.5   1445   1447   1445.8   1446.0
+SPHINCS_FAST_L1_X25519MLKEM512        100    0   5099.6    76.0   4938   5270   5084.7   5114.5
+SPHINCS_SMALL_L1_X25519MLKEM512       100    0   2720.5    44.2   2602   2824   2711.8   2729.2
+SPHINCS_SMALL_L3_X25519MLKEM768       100    0   3481.5    41.7   3389   3616   3473.3   3489.7
+
+Complete (≥100): 5/78 scenarios  (SPHINCS_FAST L3/L5 excluded: pvPortMalloc limit)
+
+Scenario                             SrvHello      Cert   CertVfy   PQCertVfy  Finished      Sum
+------------------------------------------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512            1293.4     207.1      89.0         0.0       8.0   1597.5
+COMPOSITE_L3_X25519MLKEM768            1306.9     485.7     223.6         0.0       7.9   2024.1
+FALCON_L1_X25519MLKEM512               1293.5       5.3      28.5         0.0       8.5   1335.8
+SPHINCS_FAST_L1_X25519MLKEM512         1293.8      16.4    3212.9         0.0       7.9   4531.0
+SPHINCS_SMALL_L1_X25519MLKEM512        1294.0       7.4    1110.0         0.0       7.9   2419.3
+SPHINCS_SMALL_L3_X25519MLKEM768        1306.8       7.8    1605.8         0.0       8.5   2928.9
+
+Phase breakdown: 6/78 scenarios parsed  (Note: Sum < total mean — phases cover only wolfSSL callbacks, not TCP/TLS protocol overhead)
+[saved] benchmark_retest_phases_20260429.txt
+
+Scenario                              Cert_B  CertVfy_B  PQCertVfy_B
+--------------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512             8269          0            0
+COMPOSITE_L3_X25519MLKEM768            11457          0            0
+FALCON_L1_X25519MLKEM512                3601          0            0
+SPHINCS_FAST_L1_X25519MLKEM512             0          0            0
+SPHINCS_SMALL_L1_X25519MLKEM512        16360          0            0
+SPHINCS_SMALL_L3_X25519MLKEM768            0          0            0
+
+Wire sizes: 6 scenarios
+
+Scenario                            min_free_B  peak_used_cum_B
+---------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512              45640           153016
+COMPOSITE_L3_X25519MLKEM768              35792           162864
+FALCON_L1_X25519MLKEM512                 35792           162864
+SPHINCS_FAST_L1_X25519MLKEM512           25632           173024
+SPHINCS_SMALL_L1_X25519MLKEM512          25632           173024
+
+Heap watermark (cumulative since boot): 5 scenarios
+[saved] benchmark_retest_sizes_20260429.txt

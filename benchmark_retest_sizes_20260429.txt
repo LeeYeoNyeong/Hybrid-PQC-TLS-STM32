@@ -1,0 +1,16 @@
+Scenario                              Cert_B  CertVfy_B  PQCertVfy_B
+--------------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512             8269          0            0
+COMPOSITE_L3_X25519MLKEM768            11457          0            0
+FALCON_L1_X25519MLKEM512                3601          0            0
+SPHINCS_FAST_L1_X25519MLKEM512             0          0            0
+SPHINCS_SMALL_L1_X25519MLKEM512        16360          0            0
+SPHINCS_SMALL_L3_X25519MLKEM768            0          0            0
+
+Scenario                            min_free_B  peak_used_cum_B
+---------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512              45640           153016
+COMPOSITE_L3_X25519MLKEM768              35792           162864
+FALCON_L1_X25519MLKEM512                 35792           162864
+SPHINCS_FAST_L1_X25519MLKEM512           25632           173024
+SPHINCS_SMALL_L1_X25519MLKEM512          25632           173024
