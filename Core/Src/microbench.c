@@ -7,13 +7,18 @@
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
+#include "wolfssl/wolfcrypt/mlkem.h"
 #include "wolfssl/wolfcrypt/random.h"
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 
-#define N_ITER_P256   500
-#define N_ITER_X25519  20
+#define N_ITER_P256    500
+#define N_ITER_X25519   20
+#define N_ITER_MLKEM   500
+/* max CT size: ML-KEM-1024 = 1568 B; SS always 32 B */
+#define MLKEM_CT_MAX_SZ  1568
+#define MLKEM_SS_SZ        32
 #define CPU_HZ   168000000UL
 
 /* ── DWT helpers ─────────────────────────────────────────────────────────── */
@@ -163,14 +168,118 @@ static void bench_x25519_ecdh(WC_RNG *rng) {
     print_stats("X25519_ECDH", us, N_ITER_X25519);
 }
 
+/* ── ML-KEM keygen ───────────────────────────────────────────────────────── */
+
+static void bench_mlkem_keygen(WC_RNG *rng, int type, const char *label) {
+    MlKemKey *k = wc_MlKemKey_New(type, NULL, INVALID_DEVID);
+    if (k == NULL) {
+        printf("[MICRO] %s: wc_MlKemKey_New failed\r\n", label);
+        return;
+    }
+    float us[N_ITER_MLKEM];
+    for (int i = 0; i < N_ITER_MLKEM; i++) {
+        uint32_t t0 = dwt_now();
+        int ret = wc_MlKemKey_MakeKey(k, rng);
+        us[i] = cyc_to_us(dwt_now() - t0);
+        if (ret != 0) {
+            printf("[MICRO] %s error ret=%d i=%d\r\n", label, ret, i);
+            wc_MlKemKey_Delete(k, NULL);
+            return;
+        }
+        if ((i & 0x1F) == 0) vTaskDelay(1);
+    }
+    wc_MlKemKey_Delete(k, NULL);
+    print_stats(label, us, N_ITER_MLKEM);
+}
+
+/* ── ML-KEM encap ────────────────────────────────────────────────────────── */
+/* Note: times Encapsulate only (includes internal RNG call per FIPS 203). */
+/* ct/ss on stack (not static): BSS has only 1440 B headroom on this target. */
+
+static void bench_mlkem_encap(WC_RNG *rng, int type, const char *label) {
+    byte ct[MLKEM_CT_MAX_SZ];
+    byte ss[MLKEM_SS_SZ];
+
+    MlKemKey *k = wc_MlKemKey_New(type, NULL, INVALID_DEVID);
+    if (k == NULL) {
+        printf("[MICRO] %s: wc_MlKemKey_New failed\r\n", label);
+        return;
+    }
+    if (wc_MlKemKey_MakeKey(k, rng) != 0) {
+        printf("[MICRO] %s: keygen failed\r\n", label);
+        wc_MlKemKey_Delete(k, NULL);
+        return;
+    }
+
+    float us[N_ITER_MLKEM];
+    for (int i = 0; i < N_ITER_MLKEM; i++) {
+        uint32_t t0 = dwt_now();
+        int ret = wc_MlKemKey_Encapsulate(k, ct, ss, rng);
+        us[i] = cyc_to_us(dwt_now() - t0);
+        if (ret != 0) {
+            printf("[MICRO] %s error ret=%d i=%d\r\n", label, ret, i);
+            wc_MlKemKey_Delete(k, NULL);
+            return;
+        }
+        if ((i & 0x1F) == 0) vTaskDelay(1);
+    }
+    wc_MlKemKey_Delete(k, NULL);
+    print_stats(label, us, N_ITER_MLKEM);
+}
+
+/* ── ML-KEM decap ────────────────────────────────────────────────────────── */
+/* Fresh ciphertext each iteration: only Decapsulate is timed. */
+
+static void bench_mlkem_decap(WC_RNG *rng, int type, const char *label) {
+    byte ct[MLKEM_CT_MAX_SZ];
+    byte ss[MLKEM_SS_SZ];
+    word32 ctSz;
+
+    MlKemKey *k = wc_MlKemKey_New(type, NULL, INVALID_DEVID);
+    if (k == NULL) {
+        printf("[MICRO] %s: wc_MlKemKey_New failed\r\n", label);
+        return;
+    }
+    if (wc_MlKemKey_MakeKey(k, rng) != 0) {
+        printf("[MICRO] %s: keygen failed\r\n", label);
+        wc_MlKemKey_Delete(k, NULL);
+        return;
+    }
+    if (wc_MlKemKey_CipherTextSize(k, &ctSz) != 0) {
+        printf("[MICRO] %s: CT size query failed\r\n", label);
+        wc_MlKemKey_Delete(k, NULL);
+        return;
+    }
+
+    float us[N_ITER_MLKEM];
+    for (int i = 0; i < N_ITER_MLKEM; i++) {
+        if (wc_MlKemKey_Encapsulate(k, ct, ss, rng) != 0) {
+            printf("[MICRO] %s: encap failed at i=%d\r\n", label, i);
+            wc_MlKemKey_Delete(k, NULL);
+            return;
+        }
+        uint32_t t0 = dwt_now();
+        int ret = wc_MlKemKey_Decapsulate(k, ss, ct, ctSz);
+        us[i] = cyc_to_us(dwt_now() - t0);
+        if (ret != 0) {
+            printf("[MICRO] %s error ret=%d i=%d\r\n", label, ret, i);
+            wc_MlKemKey_Delete(k, NULL);
+            return;
+        }
+        if ((i & 0x1F) == 0) vTaskDelay(1);
+    }
+    wc_MlKemKey_Delete(k, NULL);
+    print_stats(label, us, N_ITER_MLKEM);
+}
+
 /* ── Entry point ─────────────────────────────────────────────────────────── */
 
 void microbench_run(void) {
     dwt_init();
     wolfCrypt_Init();
-    printf("\r\n[MICRO] ===== DWT Microbenchmark: P256 vs X25519 =====\r\n");
-    printf("[MICRO] CPU=%lu Hz  DWT_res=%.2f ns  N_P256=%d N_X25519=%d\r\n\r\n",
-           CPU_HZ, 1e9f / (float)CPU_HZ, N_ITER_P256, N_ITER_X25519);
+    printf("\r\n[MICRO] ===== DWT Microbenchmark: P256 / X25519 / ML-KEM =====\r\n");
+    printf("[MICRO] CPU=%lu Hz  DWT_res=%.2f ns  N_P256=%d N_X25519=%d N_MLKEM=%d\r\n\r\n",
+           CPU_HZ, 1e9f / (float)CPU_HZ, N_ITER_P256, N_ITER_X25519, N_ITER_MLKEM);
 
     WC_RNG rng;
     int rret = wc_InitRng(&rng);
@@ -184,6 +293,21 @@ void microbench_run(void) {
     bench_p256_ecdh(&rng);
     bench_x25519_keygen(&rng);
     bench_x25519_ecdh(&rng);
+
+    printf("\r\n[MICRO] ----- ML-KEM keygen -----\r\n");
+    bench_mlkem_keygen(&rng, WC_ML_KEM_512,  "MLKEM512_KEYGEN");
+    bench_mlkem_keygen(&rng, WC_ML_KEM_768,  "MLKEM768_KEYGEN");
+    bench_mlkem_keygen(&rng, WC_ML_KEM_1024, "MLKEM1024_KEYGEN");
+
+    printf("\r\n[MICRO] ----- ML-KEM encap -----\r\n");
+    bench_mlkem_encap(&rng, WC_ML_KEM_512,  "MLKEM512_ENCAP");
+    bench_mlkem_encap(&rng, WC_ML_KEM_768,  "MLKEM768_ENCAP");
+    bench_mlkem_encap(&rng, WC_ML_KEM_1024, "MLKEM1024_ENCAP");
+
+    printf("\r\n[MICRO] ----- ML-KEM decap -----\r\n");
+    bench_mlkem_decap(&rng, WC_ML_KEM_512,  "MLKEM512_DECAP");
+    bench_mlkem_decap(&rng, WC_ML_KEM_768,  "MLKEM768_DECAP");
+    bench_mlkem_decap(&rng, WC_ML_KEM_1024, "MLKEM1024_DECAP");
 
     wc_FreeRng(&rng);
     wolfCrypt_Cleanup();
