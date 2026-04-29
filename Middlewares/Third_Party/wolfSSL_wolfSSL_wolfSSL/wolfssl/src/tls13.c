@@ -11309,8 +11309,8 @@ static int DoTls13PQCertificateVerify(WOLFSSL* ssl, byte* input,
 
 #if defined(HAVE_DILITHIUM)
     if (ssl->peerSapkiDer == NULL || ssl->peerSapkiLen <= 0) {
-        /* No ML-DSA pubkey available — accept without verification */
-        goto accept;
+        ret = SIG_VERIFY_E;
+        goto done;
     }
 
     /* Build the data-to-sign */
@@ -11341,7 +11341,6 @@ static int DoTls13PQCertificateVerify(WOLFSSL* ssl, byte* input,
     /* verification result recorded in ret */
     goto done;
 
-accept:
 #else
     (void)sig; (void)sigLen;
 #endif /* HAVE_DILITHIUM */

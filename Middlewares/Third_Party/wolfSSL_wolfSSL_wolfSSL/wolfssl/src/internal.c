@@ -15573,8 +15573,8 @@ static int VerifyChameleonDeltaSignature(WOLFSSL        *ssl,
     if (ca == NULL)
         ca = GetCA(SSL_CM(ssl), issuerHash);
     if (ca == NULL) {
-        WOLFSSL_MSG("[Chameleon] PQ ICA signer not found, skipping delta verify");
-        return WC_NO_ERR_TRACE(NOT_COMPILED_IN); /* non-fatal */
+        WOLFSSL_MSG("[Chameleon] PQ ICA signer not found in CM");
+        return WC_NO_ERR_TRACE(ASN_NO_SIGNER_E);
     }
 
     /* ------------------------------------------------------------------ */
@@ -16162,7 +16162,10 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                                 vr = ParseCertRelative(&pqDC, CHAIN_CERT_TYPE,
                                                        VERIFY, SSL_CM(ssl),
                                                        NULL);
-                                (void)vr;
+                                if (vr != 0) {
+                                    FreeDecodedCert(&pqDC);
+                                    ERROR_OUT(vr, exit_ppc);
+                                }
                                 FreeDecodedCert(&pqDC);
                             }
                         } /* while (listSz) — PQ chain certs */
@@ -16182,6 +16185,9 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                                    "(err=%d)\r\n",
                                    vr == 0 ? "OK" : "FAIL", vr);
                             FreeDecodedCert(&pqDC);
+                            if (vr != 0) {
+                                ERROR_OUT(vr, exit_ppc);
+                            }
                         }
                         g_cert_t_pq_ms = tls13_tick_ms() - _pq_t0;
                     }
