@@ -37,13 +37,22 @@ def main():
         print(f"{name:<22} {r['n']:>5} {r['mean']:>10.1f} {r['stddev']:>8.1f} "
               f"{r['min']:>8.1f} {r['max']:>8.1f}")
 
-    # Ratio summary
+    # Ratio summary — ECC
     if 'P256_KEYGEN' in results and 'X25519_KEYGEN' in results:
         ratio_kg = results['X25519_KEYGEN']['mean'] / results['P256_KEYGEN']['mean']
         print(f"\nX25519/P256 keygen ratio: {ratio_kg:.1f}×")
     if 'P256_ECDH' in results and 'X25519_ECDH' in results:
         ratio_dh = results['X25519_ECDH']['mean'] / results['P256_ECDH']['mean']
         print(f"X25519/P256 ECDH ratio:   {ratio_dh:.1f}×")
+
+    # ML-KEM scaling across levels
+    for op in ('KEYGEN', 'ENCAP', 'DECAP'):
+        k512, k768, k1024 = f'MLKEM512_{op}', f'MLKEM768_{op}', f'MLKEM1024_{op}'
+        if k512 in results and k768 in results and k1024 in results:
+            m512 = results[k512]['mean']
+            print(f"\nML-KEM {op} (µs):  512={m512:.0f}  "
+                  f"768={results[k768]['mean']:.0f} ({results[k768]['mean']/m512:.1f}×)  "
+                  f"1024={results[k1024]['mean']:.0f} ({results[k1024]['mean']/m512:.1f}×)")
 
 if __name__ == '__main__':
     main()

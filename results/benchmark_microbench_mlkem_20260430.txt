@@ -1,0 +1,21 @@
+[MICRO] P256_KEYGEN            n=500  mean= 20552.2 us  stddev=  29.3 us  min=20531.7  max=20783.6
+[MICRO] P256_ECDH              n=500  mean= 12823.7 us  stddev=  23.2 us  min=12803.7  max=13122.7
+[MICRO] X25519_KEYGEN          n=20  mean=115369.4 us  stddev=  73.5 us  min=115322.6  max=115639.2
+[MICRO] X25519_ECDH            n=20  mean=115124.5 us  stddev=  78.7 us  min=115068.8  max=115358.6
+
+[MICRO] ----- ML-KEM keygen -----
+[MICRO] MLKEM512_KEYGEN        n=500  mean= 14144.8 us  stddev=  92.2 us  min=14108.7  max=15135.0
+[MICRO] MLKEM768_KEYGEN        n=500  mean= 22949.8 us  stddev= 124.0 us  min=22880.0  max=23503.3
+[MICRO] MLKEM1024_KEYGEN       n=500  mean= 37430.6 us  stddev= 178.7 us  min=37325.8  max=38369.0
+
+[MICRO] ----- ML-KEM encap -----
+[MICRO] MLKEM512_ENCAP         n=500  mean= 15119.7 us  stddev= 147.3 us  min=15103.0  max=18350.9
+[MICRO] MLKEM768_ENCAP         n=500  mean= 25411.6 us  stddev= 221.3 us  min=25376.6  max=30267.1
+[MICRO] MLKEM1024_ENCAP        n=500  mean= 40332.8 us  stddev= 292.4 us  min=40290.9  max=46806.0
+
+[MICRO] ----- ML-KEM decap -----
+[MICRO] MLKEM512_DECAP         n=500  mean= 20040.3 us  stddev=  33.6 us  min=20026.3  max=20353.7
+[MICRO] MLKEM768_DECAP         n=500  mean= 32508.2 us  stddev=  39.1 us  min=32481.0  max=32797.5
+[MICRO] MLKEM1024_DECAP        n=500  mean= 49662.3 us  stddev=  43.1 us  min=49625.2  max=49958.3
+
+[MICRO] ===== Done =====
