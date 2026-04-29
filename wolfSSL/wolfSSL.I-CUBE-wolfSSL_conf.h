@@ -657,8 +657,9 @@
     #define HAVE_CURVE25519
     #define HAVE_ED25519
 
-    /* Optionally use small math (less flash usage, but much slower) */
-    #define CURVED25519_SMALL
+    /* Omit CURVED25519_SMALL to activate fe_operations.c (full 25-bit radix).
+     * ~11x faster than fe_low_mem on Cortex-M4F; costs +37 KB Flash.
+     * Note: WOLFSSL_SP_CURVE25519 does not exist in wolfSSL 5.8.4. */
 #endif
 
 /* ------------------------------------------------------------------------- */
