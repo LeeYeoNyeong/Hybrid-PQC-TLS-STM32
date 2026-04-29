@@ -27,23 +27,25 @@ static void dwt_init(void) {
 static inline uint32_t dwt_now(void) { return DWT->CYCCNT; }
 
 static float cyc_to_us(uint32_t cycles) {
+    /* assumes single measurement < 25.5s (CYCCNT 32-bit wrap at 168 MHz) */
     return (float)cycles * 1000000.0f / (float)CPU_HZ;
 }
 
 /* ── Statistics ──────────────────────────────────────────────────────────── */
 
 static void print_stats(const char *label, float *us, int n) {
-    float sum = 0.0f, sq = 0.0f, mn = us[0], mx = us[0];
+    double sum = 0.0, sq = 0.0;
+    float mn = us[0], mx = us[0];
     for (int i = 0; i < n; i++) {
-        sum += us[i];  sq += us[i] * us[i];
+        sum += us[i];  sq += (double)us[i] * us[i];
         if (us[i] < mn) mn = us[i];
         if (us[i] > mx) mx = us[i];
     }
-    float mean   = sum / n;
-    float var    = sq / n - mean * mean;
-    float stddev = sqrtf(var < 0.0f ? 0.0f : var);
+    double mean   = sum / n;
+    double var    = sq / n - mean * mean;
+    double stddev = sqrt(var < 0.0 ? 0.0 : var);
     printf("[MICRO] %-22s n=%d  mean=%8.1f us  stddev=%6.1f us  min=%7.1f  max=%7.1f\r\n",
-           label, n, mean, stddev, mn, mx);
+           label, n, (float)mean, (float)stddev, mn, mx);
 }
 
 /* ── P-256 keygen ────────────────────────────────────────────────────────── */
