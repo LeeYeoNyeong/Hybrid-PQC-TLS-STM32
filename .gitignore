@@ -34,3 +34,7 @@ uart_*.log
 # make_matrix_graphs.py 로 언제든 재생성 가능 → git LFS 없이 PNG 추적 불필요
 benchmark_graphs_*/
 benchmark_graphs_archive_*/
+
+# ── 루트 레벨 벤치마크 결과 파일 방지 ──────────────────────
+# 결과 파일은 results/ 서브디렉토리에 저장할 것
+/benchmark_*.txt
