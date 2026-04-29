@@ -4,6 +4,7 @@
 #include "main.h"              /* stm32f4xx.h → core_cm4.h (CoreDebug, DWT) */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/ecc.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/random.h"
@@ -164,12 +165,18 @@ static void bench_x25519_ecdh(WC_RNG *rng) {
 
 void microbench_run(void) {
     dwt_init();
+    wolfCrypt_Init();
     printf("\r\n[MICRO] ===== DWT Microbenchmark: P256 vs X25519 =====\r\n");
     printf("[MICRO] CPU=%lu Hz  DWT_res=%.2f ns  N_P256=%d N_X25519=%d\r\n\r\n",
            CPU_HZ, 1e9f / (float)CPU_HZ, N_ITER_P256, N_ITER_X25519);
 
     WC_RNG rng;
-    wc_InitRng(&rng);
+    int rret = wc_InitRng(&rng);
+    if (rret != 0) {
+        printf("[MICRO] wc_InitRng failed ret=%d\r\n", rret);
+        wolfCrypt_Cleanup();
+        return;
+    }
 
     bench_p256_keygen(&rng);
     bench_p256_ecdh(&rng);
@@ -177,6 +184,7 @@ void microbench_run(void) {
     bench_x25519_ecdh(&rng);
 
     wc_FreeRng(&rng);
+    wolfCrypt_Cleanup();
     printf("\r\n[MICRO] ===== Done =====\r\n");
 }
 

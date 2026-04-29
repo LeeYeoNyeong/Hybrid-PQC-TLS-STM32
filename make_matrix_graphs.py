@@ -46,10 +46,13 @@ COLS = [
 # ── loaders ────────────────────────────────────────────────────────────────
 
 def load_timing(path, min_n=100):
-    """Return {scenario: mean_ms} for n>=min_n rows."""
+    """Return {scenario: mean_ms} for n>=min_n rows (timing section only)."""
     data = {}
     with open(path) as f:
         for line in f:
+            # combined file has phases/sizes/heap sections after timing — stop at first non-timing header
+            if any(kw in line for kw in ('SrvHello', 'Cert_B', 'min_free_B')):
+                break
             m = re.match(r'([A-Z][A-Z0-9_]+)\s+(\d+)\s+\d+\s+([\d.]+)', line)
             if m and int(m.group(2)) >= min_n:
                 data[m.group(1)] = float(m.group(3))
