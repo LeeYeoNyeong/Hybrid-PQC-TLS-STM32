@@ -7,7 +7,7 @@ BAUD = 115200
 LOG  = sys.argv[1] if len(sys.argv) > 1 else f'uart_capture_{int(time.time())}.log'
 
 print(f'[uart_capture] Opening {PORT} @ {BAUD}, writing to {LOG}', flush=True)
-with serial.Serial(PORT, BAUD, timeout=None,
+with serial.Serial(PORT, BAUD, timeout=1,
                    bytesize=serial.EIGHTBITS,
                    parity=serial.PARITY_NONE,
                    stopbits=serial.STOPBITS_ONE,

@@ -21,7 +21,8 @@ endif()
 # Set the project name
 set(CMAKE_PROJECT_NAME Test_pqc_tls)
 
-option(BENCH_MODE_MATRIX "Run cert x KEM matrix benchmark (84 scenarios)" OFF)
+option(BENCH_MODE_MATRIX     "Run cert x KEM matrix benchmark (96 scenarios)" OFF)
+option(BENCH_MODE_MICROBENCH "Run DWT P256/X25519 keygen+ECDH microbenchmark" OFF)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -47,6 +48,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    Core/Src/microbench.c
 )
 
 # Add include paths
@@ -58,6 +60,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
     $<$<BOOL:${BENCH_MODE_MATRIX}>:BENCH_MODE_MATRIX=1>
+    $<$<BOOL:${BENCH_MODE_MICROBENCH}>:BENCH_MODE_MICROBENCH=1>
 )
 
 # Remove wrong libob.a library dependency when using cpp files
