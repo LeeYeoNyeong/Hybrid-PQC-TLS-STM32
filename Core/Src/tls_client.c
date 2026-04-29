@@ -8,6 +8,9 @@
 
 #include "tls_client.h"
 #include "main.h"
+#if BENCH_MODE_MICROBENCH
+#include "microbench.h"
+#endif
 #include "cmsis_os.h"
 
 #include <stdio.h>
@@ -5857,6 +5860,12 @@ static void tls_log_cb(const int level, const char *const msg)
 void tls_perf_task(void *argument)
 {
     (void)argument;
+
+#if BENCH_MODE_MICROBENCH
+    osDelay(3000);   /* brief settle for UART to connect */
+    microbench_run();
+    for (;;) osDelay(5000);
+#endif
 
     /* Wait for DHCP */
     printf("[TLS] Waiting for DHCP...\n");

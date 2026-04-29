@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate cert×KEM matrix benchmark graphs from Stage 7 results."""
+"""Generate cert×KEM matrix benchmark graphs — Phase D + retest combined (2026-04-29)."""
 import re
 import os
 import numpy as np
@@ -9,9 +9,11 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Patch
 
-OUT_DIR  = 'benchmark_graphs_20260428'
-T_FILE   = 'benchmark_matrix_n100_20260427.txt'
-PH_FILE  = 'benchmark_matrix_phases_n100_20260427.txt'
+OUT_DIR  = 'benchmark_graphs_20260429'
+T_FILE   = 'benchmark_matrix_timing_96_20260428.txt'
+PH_FILE  = 'benchmark_matrix_phases_x25519mlkem_20260428.txt'
+RETEST_T_FILE  = 'benchmark_retest_x25519mlkem_20260429.txt'
+RETEST_PH_FILE = 'benchmark_retest_phases_20260429.txt'
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -43,13 +45,16 @@ COLS = [
 
 # ── loaders ────────────────────────────────────────────────────────────────
 
-def load_timing(path):
-    """Return {scenario: mean_ms} for n>=100 rows."""
+def load_timing(path, min_n=100):
+    """Return {scenario: mean_ms} for n>=min_n rows (timing section only)."""
     data = {}
     with open(path) as f:
         for line in f:
+            # combined file has phases/sizes/heap sections after timing — stop at first non-timing header
+            if any(kw in line for kw in ('SrvHello', 'Cert_B', 'min_free_B')):
+                break
             m = re.match(r'([A-Z][A-Z0-9_]+)\s+(\d+)\s+\d+\s+([\d.]+)', line)
-            if m and int(m.group(2)) >= 100:
+            if m and int(m.group(2)) >= min_n:
                 data[m.group(1)] = float(m.group(3))
     return data
 
@@ -94,8 +99,13 @@ def key(cert, level, kem):
     return f'{cert}_{level}_{kem}'
 
 
+# Load Phase D data (96 scenarios, 6 X25519MLKEM had server errors → no data)
 timing = load_timing(T_FILE)
 phases = load_phases(PH_FILE)
+
+# Overlay retest data (6 corrected X25519MLKEM scenarios, n>=95)
+timing.update(load_timing(RETEST_T_FILE, min_n=95))
+phases.update(load_phases(RETEST_PH_FILE))
 
 
 # ── 1. Cert × KEM Heatmap ──────────────────────────────────────────────────
@@ -324,7 +334,7 @@ def plot_pqc_decomposition():
     print(f'[saved] {out}')
 
 
-SZ_FILE = 'benchmark_matrix_sizes_n100_20260428.txt'
+SZ_FILE = 'benchmark_matrix_sizes_x25519mlkem_20260428.txt'
 
 LEVEL_COLORS = {'L1': '#2ECC71', 'L3': '#F39C12', 'L5': '#E74C3C'}
 

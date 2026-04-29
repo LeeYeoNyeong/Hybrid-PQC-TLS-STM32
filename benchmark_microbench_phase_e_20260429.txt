@@ -1,0 +1,16 @@
+lwIP init starting...
+[ETH] HAL_ETH_Init OK, starting IT...
+[ETH] HAL_ETH_Start_IT done
+lwIP init done, waiting for DHCP...
+[LWIP] Link UP callback - starting DHCP
+IP Address: 192.168.0.241
+
+[MICRO] ===== DWT Microbenchmark: P256 vs X25519 =====
+[MICRO] CPU=168000000 Hz  DWT_res=5.95 ns  N_P256=500 N_X25519=20
+
+[MICRO] P256_KEYGEN            n=500  mean= 20547.9 us  stddev=  29.4 us  min=20530.8  max=20720.8
+[MICRO] P256_ECDH              n=500  mean= 12824.1 us  stddev=  26.8 us  min=12804.6  max=13137.5
+[MICRO] X25519_KEYGEN          n=20  mean=1274208.0 us  stddev= 512.0 us  min=1274073.9  max=1274657.6
+[MICRO] X25519_ECDH            n=20  mean=1272260.9 us  stddev= 512.0 us  min=1272112.9  max=1272904.0
+
+[MICRO] ===== Done =====
