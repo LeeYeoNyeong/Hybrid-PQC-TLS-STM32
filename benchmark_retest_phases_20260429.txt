@@ -1,0 +1,10 @@
+Scenario                             SrvHello      Cert   CertVfy   PQCertVfy  Finished      Sum
+------------------------------------------------------------------------------------------------
+COMPOSITE_L1_X25519MLKEM512            1293.4     207.1      89.0         0.0       8.0   1597.5
+COMPOSITE_L3_X25519MLKEM768            1306.9     485.7     223.6         0.0       7.9   2024.1
+FALCON_L1_X25519MLKEM512               1293.5       5.3      28.5         0.0       8.5   1335.8
+SPHINCS_FAST_L1_X25519MLKEM512         1293.8      16.4    3212.9         0.0       7.9   4531.0
+SPHINCS_SMALL_L1_X25519MLKEM512        1294.0       7.4    1110.0         0.0       7.9   2419.3
+SPHINCS_SMALL_L3_X25519MLKEM768        1306.8       7.8    1605.8         0.0       8.5   2928.9
+
+Phase breakdown: 6/78 scenarios parsed  (Note: Sum < total mean — phases cover only wolfSSL callbacks, not TCP/TLS protocol overhead)
